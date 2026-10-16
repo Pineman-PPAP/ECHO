@@ -142,7 +142,7 @@ export class DebugPanel {
       t.intent.textContent =
         `turn ${((i.turnRate * 180) / Math.PI).toFixed(0)}°/s  move ${i.moveSpeed.toFixed(2)} m/s\n` +
         `eyes ${i.eyesClosed ? `closed ${i.eyesClosedMs.toFixed(0)} ms` : 'open'}  face ${i.facePresent ? 'yes' : 'NO'}\n` +
-        `beam ${i.beam ? `${((i.beam.halfAngleRad * 180) / Math.PI).toFixed(0)}° ${i.beam.range.toFixed(1)} m` : 'off'}`;
+        `hum ${i.hum ? `level ${i.hum.level.toFixed(2)} pitch ${i.hum.pitch01.toFixed(2)}` : 'off'}`;
     }
     if (s.game) {
       const g = s.game;

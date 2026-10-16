@@ -1,5 +1,36 @@
 import { CONFIG } from '../config';
-import { cellCenter, findPath, worldToCell, type Cell, type Level } from './grid';
+import { cellCenter, findPath, isWall, worldToCell, type Cell, type Level } from './grid';
+
+/** Permanent paint, on an adjacent wall and pointing along it toward the exit. */
+export interface WallGuideMark {
+  cell: Cell;
+  wx: number;
+  wz: number;
+  /** +1 right / -1 left in the wall's local frame. */
+  direction: number;
+  seed: number;
+}
+
+/** Bake once per level, including side passages. Paint never follows the player.
+ * Only walls parallel to the next route step are valid, so paint cannot point into solid rock.
+ */
+export function wallGuideMarks(level: Level): WallGuideMark[] {
+  const marks: WallGuideMark[] = [];
+  for (let r = 0; r < level.rows; r++) {
+    for (let c = 0; c < level.cols; c++) {
+      if (isWall(level, c, r) || (c + r) % CONFIG.GUIDE_WALL_SPACING_CELLS !== 0) continue;
+      const path = findPath(level, { c, r }, level.exit);
+      if (!path || path.length === 0) continue;
+      const dx = path[0].c - c, dz = path[0].r - r;
+      const sides = [[-dz, dx], [dz, -dx]].filter(([wx, wz]) => isWall(level, c + wx, r + wz));
+      if (sides.length === 0) continue;
+      const seed = ((c * 73856093 ^ r * 19349663) >>> 0) / 4294967296;
+      const [wx, wz] = sides[Math.floor(seed * sides.length)];
+      marks.push({ cell: { c, r }, wx, wz, direction: dx * -wz + dz * wx, seed });
+    }
+  }
+  return marks;
+}
 
 /**
  * Where the exit draft should blow from: a few cells ahead on the shortest route to the exit.
@@ -12,7 +43,7 @@ export function guidePoint(level: Level, x: number, z: number): { x: number; z: 
   return cellCenter(path[Math.min(CONFIG.DRAFT_LOOKAHEAD_CELLS, path.length) - 1]);
 }
 
-/** One floor arrow of the exit trail: a cell centre and the yaw it points along (same convention as player.yaw). */
+/** One route sample: a cell centre and its onward yaw (same convention as player.yaw). */
 export interface TrailMark {
   x: number;
   z: number;
@@ -20,10 +51,8 @@ export interface TrailMark {
 }
 
 /**
- * The gold floor arrows: the next `count` cells of the shortest route, each pointing toward the cell after it.
- * The exit cell itself is left out (it has its own gold pad). Audio alone can't tell front from back on
- * earbuds, so this visual trail is the reliable way out; the draft only draws attention to it. The
- * arrows show only where a pulse or the beam lights them, so finding the way costs noise.
+ * Sample the next `count` route cells, each pointing toward the following cell. The exit cell is
+ * left out (it has its own pad). This route utility is independent of permanent wall-paint placement.
  */
 export function guideTrail(level: Level, x: number, z: number, count: number): TrailMark[] {
   const from = worldToCell(x, z);

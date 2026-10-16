@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { yawForward, type Level } from '../game/grid';
+import type { Level } from '../game/grid';
 import type { World } from '../game/World';
 import { Afterimages } from './Afterimages';
 import type { Creature } from '../game/World';
 import { buildLevelMeshes, COLORS } from './buildLevelMesh';
 import { CaveLife } from './CaveLife';
 import { EyeGlow } from './EyeGlow';
+import { FireflyJarView } from './FireflyJarView';
 import { GuideTrail } from './GuideTrail';
+import { NearDust } from './NearDust';
 import { PotsView } from './Pots';
 import { createEchoMaterial, createMonsterModel, setPose, type HollowFigure } from './monsterModel';
 import { artworkTexture } from './hollowArtwork';
@@ -22,14 +24,15 @@ export class Renderer {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly uniforms: RevealUniforms = createRevealUniforms();
-  /** Red monster silhouettes left behind by pulses and the beam (M4+). */
+  /** Red monster silhouettes left behind by pulses and the jar light (M4+). */
   readonly afterimages: Afterimages;
-  /** Gold floor arrows toward the exit. */
+  /** Permanent scratched red wall arrows toward the exit. */
   private readonly guide: GuideTrail;
   /** Red eyes in the dark. */
   private readonly eyes: EyeGlow;
   /** Dust, drips, bats and remains. */
   readonly caveLife: CaveLife;
+  private readonly nearDust: NearDust;
   /** Clay pots on the floor (whole or shattered). */
   private readonly pots: PotsView;
   /** Smoothed render frames per second (debug panel). */
@@ -49,6 +52,13 @@ export class Renderer {
    */
   private readonly jumpScene = new THREE.Scene();
   private readonly jumpRoot = new THREE.Group();
+  /** The firefly jar in the left hand: its own pass after the cave (cleared depth), before the jumpscare. */
+  private readonly jarScene = new THREE.Scene();
+  private readonly jar = new FireflyJarView(this.jarScene);
+  private readonly jarPos = new THREE.Vector3();
+  private lastYaw = 0;
+  /** Game-clock time the jar was first raised (null = play has not started). */
+  private jarIntroStartS: number | null = null;
 
   constructor(private readonly container: HTMLElement) {
     this.gl = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -63,6 +73,7 @@ export class Renderer {
     this.guide = new GuideTrail(this.scene, this.uniforms);
     this.eyes = new EyeGlow(this.scene);
     this.caveLife = new CaveLife(this.scene, this.uniforms);
+    this.nearDust = new NearDust(this.scene, this.uniforms);
     this.pots = new PotsView(this.scene, this.uniforms);
     this.jumpScene.add(this.jumpRoot);
     artworkTexture('lunge'); // Preload the catch portrait during the title/calibration screens.
@@ -80,7 +91,7 @@ export class Renderer {
     this.pots.setLevel(level, built.field);
     this.afterimages.clear();
     this.eyes.clear();
-    this.guide.setLevel(level);
+    this.guide.setLevel(level, this.levelGroup);
     this.hideJumpscare();
   }
 
@@ -154,6 +165,19 @@ export class Renderer {
     j.fig.body.visible = j.fig.eyes.visible = j.stare ? Math.random() > CONFIG.STALKER_STARE_FLICKER : t < 1 || Math.random() > CONFIG.JUMPSCARE_FLICKER;
   }
 
+  /** Raises the jar on first play; it stays held from then on. Later calls don't restart the lift. */
+  showJarOnce(clockS: number): void {
+    this.jarIntroStartS ??= clockS;
+  }
+
+  /** 0..1: raise into view once, then keep holding it. */
+  private jarPresence(clockS: number): number {
+    if (this.jarIntroStartS === null) return 0;
+    const t = clockS - this.jarIntroStartS;
+    const k = Math.min(Math.max(t / CONFIG.JAR_INTRO_MOVE_S, 0), 1);
+    return k * k * (3 - 2 * k);
+  }
+
   /** Camera shake for jumpscares. */
   shake(amplitude: number, durationS: number, clockS: number): void {
     this.shakeAmp = amplitude;
@@ -161,6 +185,7 @@ export class Renderer {
   }
 
   render(world: World, clockS: number, nowMs: number): void {
+    const dtS = this.lastFrameMs > 0 ? Math.min((nowMs - this.lastFrameMs) / 1000, CONFIG.MAX_DT_S) : 0;
     if (this.lastFrameMs > 0) {
       const inst = 1000 / Math.max(nowMs - this.lastFrameMs, 1);
       this.fps = this.fps === 0 ? inst : this.fps * 0.9 + inst * 0.1;
@@ -182,23 +207,29 @@ export class Renderer {
     this.eyes.update(world.eyes(), clockS);
     this.caveLife.update(clockS);
     this.pots.update(world.pots.list);
-    this.guide.update(p.x, p.z);
     const u = this.uniforms;
     u.uTime.value = clockS;
     world.pulses.writeUniforms(u);
-    const beam = world.beam;
-    if (beam) {
-      const f = yawForward(p.yaw);
-      u.uBeamOn.value = 1;
-      u.uBeamOrigin.value.copy(this.camera.position);
-      u.uBeamDir.value.set(f.x, 0, f.z).normalize();
-      u.uBeamCos.value = Math.cos(beam.halfAngleRad);
-      u.uBeamRange.value = beam.range;
-      u.uBeamStrength.value = beam.strength;
-    } else {
-      u.uBeamOn.value = 0;
-    }
+    // The jar follows the camera; its light on the rock comes from where it is held.
+    const turnRate = dtS > 0 ? (p.yaw - this.lastYaw) / dtS : 0;
+    this.lastYaw = p.yaw;
+    const jar = world.jar;
+    this.jar.root.position.copy(this.camera.position);
+    this.jar.root.quaternion.copy(this.camera.quaternion);
+    const presence = this.jarPresence(clockS);
+    this.jar.update(dtS, clockS, jar.glow, jar.excitement, p.bobPhase, turnRate, presence);
+    this.jar.root.updateMatrixWorld(true);
+    u.uJarPos.value.copy(this.jar.worldCenter(this.jarPos));
+    u.uJarRadius.value = jar.radius;
+    u.uJarStrength.value = jar.lit ? jar.glow * CONFIG.JAR_LIGHT_STRENGTH * (1 - CONFIG.JAR_FLICKER + CONFIG.JAR_FLICKER * this.jar.blink * 2) : 0;
+    this.nearDust.update(this.camera, this.height);
     this.gl.render(this.scene, this.camera);
+    if (presence > 0) {
+      this.gl.autoClear = false;
+      this.gl.clearDepth();
+      this.gl.render(this.jarScene, this.camera);
+      this.gl.autoClear = true;
+    }
     if (this.jumpscare?.fig.group.visible) {
       this.jumpRoot.position.copy(this.camera.position);
       this.jumpRoot.quaternion.copy(this.camera.quaternion);

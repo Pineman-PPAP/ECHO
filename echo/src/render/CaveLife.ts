@@ -9,6 +9,7 @@ import { createRevealMaterial, createRevealPointsMaterial, type RevealUniforms }
 
 const LIFE_COLORS = {
   dust: 0x8f938d,
+  moth: 0x817765,
   drop: 0xa9bcc2,
   bat: 0x3e3b38,
   bone: 0xc4bfae,
@@ -20,7 +21,7 @@ interface ActiveBat extends Bat {
 }
 
 /**
- * Everything alive (or once alive) in the cave, all lit only by sonar: drifting dust, dripping water,
+ * Everything alive (or once alive) in the cave, all lit only by sonar/jar: drifting dust, small moths, dripping water,
  * bats that burst off the ceiling at a loud clap, and remains of the last person who came down here.
  * Static parts are rebuilt per level; bats are one InstancedMesh (one draw call).
  */
@@ -59,6 +60,7 @@ export class CaveLife {
     this.bats.count = 0;
     const seed = levelSeed(level);
     this.levelGroup.add(dust(level, seed, this.uniforms));
+    this.levelGroup.add(moths(level, seed, this.uniforms));
     this.levelGroup.add(drips(level, seed, this.uniforms));
     for (const m of remains(remainsSpots(level, seed), field, this.uniforms)) this.levelGroup.add(m);
   }
@@ -150,6 +152,29 @@ function dust(level: Level, seed: number, uniforms: RevealUniforms): THREE.Point
   const pts = new THREE.Points(geo, createRevealPointsMaterial(uniforms, LIFE_COLORS.dust, CONFIG.DUST_POINT_PX, 'dust'));
   pts.frustumCulled = false;
   return pts;
+}
+
+/** A few quiet insects in open air, not luminous fireflies. Motion and wingbeats run on the GPU. */
+function moths(level: Level, seed: number, uniforms: RevealUniforms): THREE.Points {
+  const rand = mulberry32(seed + 404);
+  const pos: number[] = [];
+  const seeds: number[] = [];
+  let open = 0;
+  for (let r = 0; r < level.rows; r++) {
+    for (let c = 0; c < level.cols; c++) {
+      if (isWall(level, c, r)) continue;
+      if (open++ % CONFIG.MOTH_EVERY_CELLS !== 0) continue;
+      const p = cellCenter({ c, r });
+      pos.push(p.x + (rand() - 0.5) * 0.7, 1.1 + rand() * 0.9, p.z + (rand() - 0.5) * 0.7);
+      seeds.push(rand());
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(new Float32Array(seeds), 1));
+  const points = new THREE.Points(geo, createRevealPointsMaterial(uniforms, LIFE_COLORS.moth, CONFIG.MOTH_POINT_PX, 'moth'));
+  points.frustumCulled = false;
+  return points;
 }
 
 /** Falling drops at the drip spots (the shader animates them; App plays the matching drip sounds). */

@@ -36,14 +36,14 @@ describe('IntentBuilder', () => {
     expect(lost.eyesClosed).toBe(false);
     expect(lost.moveSpeed).toBe(0);
   });
-  it('turns onsets into pulses and hums into a beam (humStarted only once)', () => {
+  it('turns onsets into pulses and hums into a hum (humStarted only once)', () => {
     const ib = new IntentBuilder(defaultCalibration());
     const a = ib.update(0, null, micFrame({ onsets: [{ timeMs: 0, peakAboveDb: CONFIG.CLAP_REF_ABOVE_DB_DEFAULT }] }));
     expect(a.pulses).toHaveLength(1);
     expect(a.pulses[0]).toBeCloseTo(1);
     const h1 = ib.update(16, null, micFrame({ humActive: true, aboveDb: 30, humPitchHz: 220 }));
     const h2 = ib.update(32, null, micFrame({ humActive: true, aboveDb: 30, humPitchHz: 220 }));
-    expect(h1.beam).not.toBeNull();
+    expect(h1.hum).not.toBeNull();
     expect(h1.humStarted).toBe(true);
     expect(h2.humStarted).toBe(false);
   });

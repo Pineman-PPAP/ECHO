@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 import { idleIntent, type PlayerIntent } from './intent';
-import { beamFromHum } from './mapping';
+import { humFromMic } from './mapping';
 
 /**
  * DEVELOPMENT ONLY (?sim=1). Keyboard -> PlayerIntent so the game can be built and tested without
@@ -8,7 +8,7 @@ import { beamFromHum } from './mapping';
  *
  *   Arrow keys / WASD  turn and walk (hold Left Shift to sneak)
  *   Space              clap (pulse, loudness 1.0)    Shift+Space  soft click (loudness 0.3)
- *   H (hold)           hum (beam)                    [ and ]      lower / raise hum pitch
+ *   H (hold)           hum (jar)                     [ and ]      lower / raise hum pitch
  *   B (hold)           eyes closed                   F            toggle "face lost"
  */
 export class SimInput {
@@ -54,7 +54,7 @@ export class SimInput {
     const humming = d('KeyH');
     const humAboveDb =
       CONFIG.HUM_MIN_ABOVE_FLOOR_DB + 0.8 * (CONFIG.HUM_REF_ABOVE_DB_DEFAULT - CONFIG.HUM_MIN_ABOVE_FLOOR_DB);
-    intent.beam = humming ? beamFromHum(humAboveDb, this.humPitchHz, CONFIG.HUM_REF_ABOVE_DB_DEFAULT) : null;
+    intent.hum = humming ? humFromMic(humAboveDb, this.humPitchHz, CONFIG.HUM_REF_ABOVE_DB_DEFAULT) : null;
     intent.humStarted = humming && !this.prevHum;
     this.prevHum = humming;
     return intent;

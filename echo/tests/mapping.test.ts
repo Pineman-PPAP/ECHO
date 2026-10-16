@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
-import { beamFromHum, leanToSpeed, onsetLoudness, pulseRadius, yawToTurnRate } from '../src/input/mapping';
+import { humFromMic, leanToSpeed, onsetLoudness, pulseRadius, yawToTurnRate } from '../src/input/mapping';
 
 describe('yawToTurnRate', () => {
   it('has a dead zone, is signed (+ = left) and saturates', () => {
@@ -34,13 +34,14 @@ describe('onsetLoudness / pulseRadius', () => {
   });
 });
 
-describe('beamFromHum', () => {
-  it('higher pitch => narrower beam; louder => longer range', () => {
-    const low = beamFromHum(30, 110, 30);
-    const high = beamFromHum(30, 520, 30);
-    expect(low.halfAngleRad).toBeCloseTo((CONFIG.BEAM_WIDE_HALF_ANGLE_DEG * Math.PI) / 180);
-    expect(high.halfAngleRad).toBeCloseTo((CONFIG.BEAM_NARROW_HALF_ANGLE_DEG * Math.PI) / 180);
-    expect(beamFromHum(30, 220, 30).range).toBeCloseTo(CONFIG.BEAM_MAX_RANGE);
-    expect(beamFromHum(CONFIG.HUM_MIN_ABOVE_FLOOR_DB, 220, 30).range).toBeCloseTo(CONFIG.BEAM_MIN_RANGE);
+describe('humFromMic', () => {
+  it('louder => higher level; pitch maps 0..1 between HUM_LOW and HUM_HIGH', () => {
+    expect(humFromMic(30, 220, 30).level).toBeCloseTo(1);
+    expect(humFromMic(CONFIG.HUM_MIN_ABOVE_FLOOR_DB, 220, 30).level).toBeCloseTo(0);
+    expect(humFromMic(200, 220, 30).level).toBeCloseTo(1.3);
+    expect(humFromMic(30, CONFIG.HUM_LOW_PITCH_HZ, 30).pitch01).toBeCloseTo(0);
+    expect(humFromMic(30, CONFIG.HUM_HIGH_PITCH_HZ, 30).pitch01).toBeCloseTo(1);
+    expect(humFromMic(30, 80, 30).pitch01).toBe(0);
+    expect(humFromMic(30, 900, 30).pitch01).toBe(1);
   });
 });

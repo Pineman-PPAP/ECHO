@@ -101,7 +101,7 @@ describe('the Stalker', () => {
     ['walking', { moveSpeed: 1 }],
     ['turning the head', { turnRate: 1.5 }],
     ['a clap', { pulses: [0.6] }],
-    ['a hum', { beam: { halfAngleRad: 0.3, range: 8, strength: 1, level: 0.5 } }],
+    ['a hum', { hum: { level: 0.5, pitch01: 0.5 } }],
   ] as const)('during the stare, %s gets you caught', (_name, input) => {
     const { w, t } = toStare();
     const r = runUntil(w, t, 500, () => input as Partial<PlayerIntent>, () => false);

@@ -82,7 +82,7 @@ export const CONTROLS: ReadonlyArray<readonly [input: string, effect: string]> =
   ['Turn your head', 'look around'],
   ['Lean in · lean back', 'walk · step back (lean gently to sneak)'],
   ['Clap', 'lights up the cave, and they hear it'],
-  ['Hum', 'a narrow beam where you look, heard only up close'],
+  ['Hum', 'wakes the fireflies in your jar: light all around you, heard only up close'],
 ];
 
 const TEXT: Record<CalibStepId, { title: string; prompt: string; why: string }> = {
@@ -114,7 +114,7 @@ const TEXT: Record<CalibStepId, { title: string; prompt: string; why: string }> 
   hum: {
     title: 'Hum',
     prompt: 'Hum one steady note, “mmmmm”, for two seconds.',
-    why: 'Humming shines a narrow beam where you look. It is quiet: only something right next to you hears it.',
+    why: 'Humming wakes the fireflies in the jar in your hand: they light the rock around you. It is quiet: only something right next to you hears it.',
   },
   speakers: {
     title: 'Headphone check',
