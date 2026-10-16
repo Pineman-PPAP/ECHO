@@ -4,7 +4,7 @@ import { cellCenter, parseLevel, type LevelDef } from '../src/game/grid';
 import { LEVELS } from '../src/game/levels';
 import { Player } from '../src/game/Player';
 import { World, type WorldEvent } from '../src/game/World';
-import { beamFromHum } from '../src/input/mapping';
+import { humFromMic } from '../src/input/mapping';
 import { intent } from './helpers';
 
 const corridor: LevelDef = {
@@ -89,24 +89,38 @@ describe('World', () => {
     expect(w.monsters[0].state).toBe('idle');
   });
 
-  it('the beam reveals a monster inside the cone, throttled', () => {
-    const w = new World(corridor);
-    const beam = beamFromHum(60, 520, 30); // loud, narrow, long
-    expect(beam.range).toBe(CONFIG.BEAM_MAX_RANGE);
-    w.player.x = cellCenter({ c: 4, r: 1 }).x; // monster is 6 cells = 18 m east
-    const reveals = stepFor(w, 1000, { beam }, { now: 0 }).filter((e) => e.type === 'reveal');
+  it('the firefly jar reveals a monster within its light, throttled', () => {
+    const hum = humFromMic(60, 220, 30); // a loud hum: full glow
+    const near = new World(corridor);
+    near.player.x = cellCenter({ c: 8, r: 1 }).x; // monster is 2 cells = 6 m east
+    const reveals = stepFor(near, 1500, { hum }, { now: 0 }).filter((e) => e.type === 'reveal');
+    expect(near.jar.radius).toBeGreaterThan(6);
     expect(reveals.length).toBeGreaterThanOrEqual(6);
-    expect(reveals.length).toBeLessThanOrEqual(1000 / CONFIG.BEAM_AFTERIMAGE_INTERVAL_MS + 1);
+    expect(reveals.length).toBeLessThanOrEqual(1500 / CONFIG.JAR_AFTERIMAGE_INTERVAL_MS + 1);
+    const far = new World(corridor);
+    far.player.x = cellCenter({ c: 6, r: 1 }).x; // 12 m: beyond the jar's reach
+    expect(stepFor(far, 1500, { hum }).some((e) => e.type === 'reveal')).toBe(false);
+  });
+
+  it('the jar light lights all around (not a cone) but not through rock', () => {
+    const hum = humFromMic(60, 220, 30);
+    const behind = new World(corridor);
+    behind.player.x = cellCenter({ c: 8, r: 1 }).x;
+    behind.player.yaw += Math.PI; // looking away from the monster
+    expect(stepFor(behind, 1000, { hum }).some((e) => e.type === 'reveal')).toBe(true);
+    const walled = new World({ id: 'w', name: 'w', startFacing: 'E', intro: [], map: ['#####', '#S#M#', '#...#', '#E..#', '#####'] });
+    walled.monstersEnabled = false; // keep it still behind the wall
+    expect(stepFor(walled, 1000, { hum }).some((e) => e.type === 'reveal')).toBe(false);
   });
 
   it('a hum is heard only up close', () => {
-    const beam = beamFromHum(60, 520, 30); // as loud as a hum gets
+    const hum = humFromMic(60, 520, 30); // as loud as a hum gets
     const far = new World(corridor);
     far.player.x = cellCenter({ c: 8, r: 1 }).x; // 2 cells = 6 m from the monster
-    expect(stepFor(far, 700, { beam }).some((e) => e.type === 'heard')).toBe(false);
+    expect(stepFor(far, 700, { hum }).some((e) => e.type === 'heard')).toBe(false);
     const near = new World(corridor);
     near.player.x = cellCenter({ c: 9, r: 1 }).x; // 3 m
-    expect(stepFor(near, 700, { beam }).some((e) => e.type === 'heard')).toBe(true);
+    expect(stepFor(near, 700, { hum }).some((e) => e.type === 'heard')).toBe(true);
   });
 
   it('walking is heard, sneaking is not', () => {

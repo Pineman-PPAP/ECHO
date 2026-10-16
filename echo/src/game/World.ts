@@ -1,9 +1,9 @@
 import { CONFIG } from '../config';
 import type { PlayerIntent } from '../input/intent';
-import type { BeamParams } from '../input/mapping';
 import { Ambience, type AmbientCue } from './ambience';
 import { batRoosts, type Roost } from './caveLife';
-import { cellCenter, lineOfSight, parseLevel, yawForward, type Level, type LevelDef } from './grid';
+import { cellCenter, lineOfSight, parseLevel, type Level, type LevelDef } from './grid';
+import { FireflyJar } from './FireflyJar';
 import { canHear, type SoundEvent, type SoundKind } from './hearing';
 import { Hush } from './Hush';
 import { Moments, type MomentKind } from './moments';
@@ -34,7 +34,7 @@ export type WorldEvent =
   | { type: 'alerted'; monsterId: number; x: number; z: number }
   | { type: 'monsterMoveStart'; monsterId: number }
   | { type: 'monsterMoveStop'; monsterId: number }
-  /** A pulse wavefront or the beam touched a creature: draw an afterimage at (x, z) facing the player, in this pose. */
+  /** A pulse wavefront or the jar's light touched a creature: draw an afterimage at (x, z) facing the player, in this pose. */
   | { type: 'reveal'; who: Creature; monsterId: number; x: number; z: number; facing: number; strength: number; pose: PoseChoice }
   | { type: 'hush'; what: 'appear' | 'gone' }
   | { type: 'moment'; kind: MomentKind; prompt: string | null }
@@ -79,11 +79,11 @@ export class World {
   /** The Hush, on levels that have it (null otherwise). */
   readonly hush: Hush | null;
   readonly moments: Moments;
+  /** The firefly jar in the player's left hand: humming wakes it. Read by the renderer. */
+  readonly jar = new FireflyJar();
   readonly pots: Pots;
   /** Summoned by a broken pot on levels with monsters. */
   readonly stalker = new Stalker();
-  /** Current hum beam (null when not humming). Read by the renderer. */
-  beam: BeamParams | null = null;
   status: WorldStatus = 'playing';
   /** False during the tutorial: monsters neither hear nor move, and the Hush and fake sounds stay away. */
   monstersEnabled: boolean;
@@ -94,7 +94,7 @@ export class World {
   private readonly stalkerRand: () => number;
   private readonly ambience: Ambience;
   private lastHumNoiseMs = -Infinity;
-  private readonly lastBeamRevealMs = new Map<number, number>();
+  private readonly lastJarRevealMs = new Map<number, number>();
   private readonly roosts: Roost[];
   private readonly roostsFlown = new Set<number>();
 
@@ -148,11 +148,11 @@ export class World {
       }
     }
 
-    // 3. Humming lights the beam and makes a little noise every HUM_NOISE_INTERVAL_MS (heard only up close).
-    this.beam = intent.beam;
-    if (this.beam && nowMs - this.lastHumNoiseMs >= CONFIG.HUM_NOISE_INTERVAL_MS) {
+    // 3. Humming wakes the fireflies in the jar and makes a little noise every HUM_NOISE_INTERVAL_MS (heard only up close).
+    this.jar.update(dtS, intent.hum);
+    if (intent.hum && nowMs - this.lastHumNoiseMs >= CONFIG.HUM_NOISE_INTERVAL_MS) {
       this.lastHumNoiseMs = nowMs;
-      sounds.push({ kind: 'hum', x: p.x, z: p.z, loudness: this.beam.level * CONFIG.HUM_NOISE_SCALE, timeMs: nowMs });
+      sounds.push({ kind: 'hum', x: p.x, z: p.z, loudness: intent.hum.level * CONFIG.HUM_NOISE_SCALE, timeMs: nowMs });
     }
     // Loudest sound the player made this frame (the Hush is driven back by it).
     let loudest = 0;
@@ -164,7 +164,7 @@ export class World {
     // 4b. The Stalker. While it comes and stares, the Hollows and the Hush hold still.
     if (this.stalker.phase !== 'idle') {
       const moved = p.speed > CONFIG.STALKER_MOVE_LIMIT_MPS || Math.abs(intent.turnRate) > CONFIG.STALKER_TURN_LIMIT_RAD_S;
-      const sounded = loudest > 0 || intent.pulses.length > 0 || intent.beam !== null;
+      const sounded = loudest > 0 || intent.pulses.length > 0 || intent.hum !== null;
       for (const what of this.stalker.update(dtS, p.x, p.z, p.yaw, moved, sounded)) {
         if (what === 'caught') {
           this.status = 'caught';
@@ -240,20 +240,15 @@ export class World {
         }
       }
     }
-    //     The beam refreshes an afterimage every BEAM_AFTERIMAGE_INTERVAL_MS while a creature is inside the cone.
-    if (this.beam) {
-      const f = yawForward(p.yaw);
-      const cosHalf = Math.cos(this.beam.halfAngleRad);
+    //     The jar's light refreshes an afterimage every JAR_AFTERIMAGE_INTERVAL_MS while a creature stands in it.
+    if (this.jar.lit) {
+      const radius = this.jar.radius;
       for (const c of creatures) {
-        const dx = c.x - p.x;
-        const dz = c.z - p.z;
-        const d = Math.hypot(dx, dz);
-        if (d < 1e-6 || d > this.beam.range) continue;
-        if ((dx * f.x + dz * f.z) / d < cosHalf) continue;
-        const last = this.lastBeamRevealMs.get(c.id) ?? -Infinity;
-        if (nowMs - last < CONFIG.BEAM_AFTERIMAGE_INTERVAL_MS) continue;
-        this.lastBeamRevealMs.set(c.id, nowMs);
-        events.push({ type: 'reveal', who: c.who, monsterId: c.id, x: c.x, z: c.z, facing: Math.atan2(p.x - c.x, p.z - c.z), strength: this.beam.strength, pose: c.pose });
+        if (Math.hypot(c.x - p.x, c.z - p.z) > radius || !lineOfSight(this.level, p.x, p.z, c.x, c.z)) continue;
+        const last = this.lastJarRevealMs.get(c.id) ?? -Infinity;
+        if (nowMs - last < CONFIG.JAR_AFTERIMAGE_INTERVAL_MS) continue;
+        this.lastJarRevealMs.set(c.id, nowMs);
+        events.push({ type: 'reveal', who: c.who, monsterId: c.id, x: c.x, z: c.z, facing: Math.atan2(p.x - c.x, p.z - c.z), strength: this.jar.glow, pose: c.pose });
       }
     }
 
@@ -366,7 +361,7 @@ export class World {
     return choosePose(m.state, Math.hypot(m.x - this.player.x, m.z - this.player.z), m.id, m.x, m.z);
   }
 
-  /** Creatures a pulse or the beam can reveal this frame. */
+  /** Creatures a pulse or the jar's light can reveal this frame. */
   private revealables(): Array<{ who: Creature; id: number; x: number; z: number; pose: PoseChoice }> {
     const list: Array<{ who: Creature; id: number; x: number; z: number; pose: PoseChoice }> = this.monsters.map((m) => ({
       who: 'hollow',

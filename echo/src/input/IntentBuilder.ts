@@ -5,7 +5,7 @@ import { EyeState } from './face/EyeState';
 import type { FaceFrame } from './face/FaceTracker';
 import { OneEuroFilter } from './filters/OneEuro';
 import type { PlayerIntent } from './intent';
-import { beamFromHum, leanToSpeed, onsetLoudness, yawToTurnRate } from './mapping';
+import { humFromMic, leanToSpeed, onsetLoudness, yawToTurnRate } from './mapping';
 
 /**
  * Turns raw sensor frames into a PlayerIntent using the player's calibration.
@@ -65,7 +65,7 @@ export class IntentBuilder {
       pulses: mic ? mic.onsets
         .filter((o) => o.peakAboveDb >= Math.max(CONFIG.ONSET_MIN_ABOVE_FLOOR_DB, this.calib.clapRefAboveDb - CONFIG.CLAP_REJECT_BELOW_REF_DB))
         .map((o) => onsetLoudness(o.peakAboveDb, this.calib.clapRefAboveDb)) : [],
-      beam: humActive && mic ? beamFromHum(mic.aboveDb, mic.humPitchHz, this.calib.humRefAboveDb) : null,
+      hum: humActive && mic ? humFromMic(mic.aboveDb, mic.humPitchHz, this.calib.humRefAboveDb) : null,
       humStarted: humActive && !this.prevHum,
     };
     this.prevHum = humActive;

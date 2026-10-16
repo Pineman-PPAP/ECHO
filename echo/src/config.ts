@@ -102,22 +102,82 @@ export const CONFIG = {
   PULSE_MAX_RADIUS: 24,
   /** Must equal MAX_PULSES in the GLSL source (revealMaterial.ts injects it as a define). */
   MAX_PULSES: 8,
-  BEAM_MIN_PITCH_HZ: 110,
-  BEAM_MAX_PITCH_HZ: 300,
-  /** Low hum => wide floodlight, high hum => narrow spotlight. */
-  BEAM_WIDE_HALF_ANGLE_DEG: 34,
-  BEAM_NARROW_HALF_ANGLE_DEG: 8,
-  BEAM_MIN_RANGE: 6,
-  BEAM_MAX_RANGE: 20,
-  /** Gold floor arrows on the next N cells of the shortest route to the exit (0 = off). */
-  GUIDE_TRAIL_CELLS: 5,
+  /** Hum pitches mapped to 0..1 (log scale): how excited the fireflies are. M3: a comfortable male hum is ~120-250 Hz. */
+  HUM_LOW_PITCH_HZ: 110,
+  HUM_HIGH_PITCH_HZ: 300,
+
+  // ---------------- Firefly jar (the hum's light, held in the left hand) ----------------
   /**
-   * Trail glow with no pulse/beam. 0 = the arrows only show when a pulse or the beam lights them,
-   * so finding the way always costs noise (gameplay pass; was 0.12).
+   * Humming wakes the fireflies: their glow eases toward the hum's level with time constant JAR_WAKE_S
+   * and fades naturally with JAR_SLEEP_S when the hum gets quieter or stops. Silence eventually
+   * reaches zero glow; there is no idle light. Any detected hum gives at least JAR_MIN_HUM_GLOW.
    */
-  GUIDE_TRAIL_AMBIENT: 0,
-  /** Length of each floor arrow (metres). */
-  GUIDE_TRAIL_SIZE_M: 0.9,
+  JAR_WAKE_S: 0.35,
+  JAR_SLEEP_S: 0.55,
+  JAR_MIN_HUM_GLOW: 0.35,
+  /** Glow below this lights nothing and reveals nothing. */
+  JAR_LIT_MIN: 0.05,
+  /** Light reaches this far at the faintest glow and at a full (calibrated) hum. All around you, not a cone. */
+  JAR_MIN_RADIUS_M: 3.5,
+  JAR_MAX_RADIUS_M: 9,
+  /** Brightness of the jar's light on the rock at full glow (before CAVE_EXPOSURE). */
+  JAR_LIGHT_STRENGTH: 0.75,
+  /** Tint of the jar's light on the rock (pale firefly green-yellow). */
+  JAR_LIGHT_COLOR: 0xe4f0a0,
+  /** 0..1: how much the light breathes with the fireflies' blinking. */
+  JAR_FLICKER: 0.3,
+  /** Afterimage refresh while a creature stands in the jar's light. */
+  JAR_AFTERIMAGE_INTERVAL_MS: 120,
+  /** Where the jar is held, in camera space (metres: +x right, +y up, -z ahead), and its size. */
+  JAR_HOLD_X_M: -0.33,
+  JAR_HOLD_Y_M: -0.155,
+  JAR_HOLD_Z_M: -0.44,
+  JAR_RADIUS_M: 0.052,
+  JAR_HEIGHT_M: 0.13,
+  /** The jar sways with each stride and lags behind head turns. */
+  JAR_SWAY_M: 0.006,
+  JAR_TURN_LAG: 0.035,
+  /**
+   * The jar rises into view over JAR_INTRO_MOVE_S when play first starts and stays held on screen.
+   * Raising it does not light it: fireflies emit only while humming.
+   */
+  JAR_INTRO_MOVE_S: 0.8,
+  /** First-person artwork only; these never change the jar's world light or hum mapping. */
+  JAR_ART_WIDTH_M: 0.31,
+  JAR_ART_DARK_EXPOSURE: 0.055,
+  JAR_ART_LIT_EXPOSURE: 0.85,
+  /** Fireflies in the jar (render only). */
+  FIREFLY_COUNT: 36,
+  /** Keep the original 14-insect flicker sample so additional flies cannot change cave lighting. */
+  FIREFLY_LIGHT_SAMPLE_COUNT: 14,
+  FIREFLY_COLOR: 0xc8ff5a,
+  FIREFLY_POINT_PX: 24,
+  /** Per-insect exposure: a denser jar should keep individual lights instead of a solid bloom. */
+  FIREFLY_VISUAL_EXPOSURE: 0.8,
+  /** Visual flight only: keep insects distributed through the full height instead of sinking. */
+  FIREFLY_HEIGHT_WANDER: 0.06,
+  FIREFLY_HEIGHT_RETURN_PER_S: 6,
+  FIREFLY_HALO_COLOR: 0x6dff3a,
+  /** Points per firefly: the firefly plus a short fading trail of where it just was. */
+  FIREFLY_TRAIL: 6,
+  /** Flying speed asleep, awake, and the extra share a high hum adds (excited). */
+  FIREFLY_SLEEP_SPEED: 0.006,
+  FIREFLY_AWAKE_SPEED: 0.05,
+  FIREFLY_EXCITED_BOOST: 1.2,
+  /** Blink rate asleep and awake (Hz). */
+  FIREFLY_SLEEP_BLINK_HZ: 0.35,
+  FIREFLY_AWAKE_BLINK_HZ: 1.6,
+  /** Fast tiny jitter of their wings ("buzzing"), metres. */
+  FIREFLY_BUZZ_M: 0.0014,
+  /** Permanent scratched paint. Sonar boosts contrast; close jar light shows normal paint. */
+  GUIDE_WALL_SPACING_CELLS: 2,
+  GUIDE_WALL_HEIGHT_M: 1.45,
+  GUIDE_WALL_SIZE_M: 0.95,
+  GUIDE_WALL_COLOR: 0x873027,
+  GUIDE_WALL_PULSE_COLOR: 0xcd3325,
+  GUIDE_WALL_AMBIENT: 0.035,
+  GUIDE_WALL_JAR_NEAR_M: 3.2,
+  GUIDE_WALL_PULSE_BOOST: 3,
 
   // ---------------- Hearing (monsters) ----------------
   HEAR_MIN_RADIUS: 4,
@@ -176,7 +236,6 @@ export const CONFIG = {
   HOLLOW_ART_EXPOSURE: 0.85,
   HOLLOW_ART_EDGE_COLOR: 0x852824,
   HOLLOW_ART_ALPHA_CUTOFF: 0.06,
-  BEAM_AFTERIMAGE_INTERVAL_MS: 120,
   MAX_AFTERIMAGES: 24,
   /** Heartbeat / red vignette start when an alerted monster is closer than this. */
   DANGER_RADIUS: 12,
@@ -309,27 +368,50 @@ export const CONFIG = {
    * A pulse lights the rock in a quick flash (decaying at CAVE_FLASH_DECAY_PER_S per second), leaving a
    * dim afterglow of CAVE_AFTERGLOW of it that fades over PULSE_FADE_S: the dark comes back fast.
    */
-  CAVE_AFTERGLOW: 0.5,
-  CAVE_FLASH_DECAY_PER_S: 1.8,
+  CAVE_AFTERGLOW: 0.36,
+  CAVE_FLASH_DECAY_PER_S: 2.8,
+  /** Echo-only grading; leave the firefly jar's exposure and warm tint unchanged. */
+  CAVE_ECHO_COLOR: 0xb2bdc2,
+  CAVE_PULSE_GAIN: 0.85,
+  CAVE_PULSE_MAX_LIGHT: 0.65,
+  CAVE_PULSE_ATTACK_S: 0.035,
+  CAVE_PULSE_CREVICE: 0.55,
+  CAVE_PULSE_GLOSS: 0.6,
   /** Overall brightness of lit rock, and how strongly wet bumps facing you glint. */
   CAVE_EXPOSURE: 1.7,
   CAVE_GLOSS: 0.5,
   /** 0..1: rock shaded by its flat mesh faces (angular, chipped stone) rather than smooth normals. */
   CAVE_FACET: 0.4,
-  /** Cave colours (render): cold grey stone, darker floor and ceiling; a thin cold-white line at the wavefront. Red Hollows and the gold way out stay the only colours. */
+  /** Cold grey rock with darker floor/ceiling and a soft broken wavefront. */
   CAVE_WALL_COLOR: 0xb4b3aa,
   CAVE_FLOOR_COLOR: 0x8a877e,
   CAVE_CEIL_COLOR: 0x66686a,
   CAVE_RING_COLOR: 0xdfe7ec,
-  CAVE_RING_WIDTH_M: 0.3,
-  /** Markers on the floor (exit pad, gold arrows) sit this high so floor bumps never cover them. */
+  CAVE_RING_WIDTH_M: 0.9,
+  /** Exit markers sit this high so floor bumps never cover them. */
   CAVE_MARKER_Y_M: 0.1,
 
   // ---------------- Cave life ----------------
-  /** Dust motes per floor cell, drifting in the air; only a pulse or the beam shows them (render). */
-  DUST_PER_CELL: 9,
+  /** Airborne dust per floor cell, seen only in sonar/jar light (render only). */
+  DUST_PER_CELL: 36,
   DUST_DRIFT_M: 0.18,
-  DUST_POINT_PX: 1.4,
+  DUST_POINT_PX: 3.4,
+  DUST_OPACITY: 0.65,
+  DUST_NEAR_FADE_M: 0.35,
+  DUST_FAR_FADE_M: 14,
+  /** Near-lens airborne layer: close soft flecks, like dust caught in night-camera light. */
+  LENS_DUST_COUNT: 1100,
+  LENS_DUST_SPAN_M: 6,
+  LENS_DUST_HEIGHT_M: 3.6,
+  LENS_DUST_BREEZE_MPS: 0.18,
+  LENS_DUST_OPACITY: 0.42,
+  LENS_DUST_DIAMETER_M: 0.005,
+  LENS_DUST_DEFOCUS_PX: 22,
+  /** Sparse, non-glowing cave insects. One per this many open cells; no gameplay/noise effects. */
+  MOTH_EVERY_CELLS: 12,
+  MOTH_POINT_PX: 7,
+  MOTH_DRIFT_M: 0.38,
+  MOTH_FLAP_HZ: 9,
   /** One dripping spot per this many floor cells; drops fall from DRIP_TOP_M every DRIP_MIN..MAX_PERIOD_S. */
   DRIP_EVERY_CELLS: 7,
   DRIP_TOP_M: 3.0,
@@ -347,11 +429,11 @@ export const CONFIG = {
   BAT_MIN_LOUDNESS: 0.9,
   BAT_WAKE_RADIUS_M: 14,
   /** Bats per flock; they burst over the player's head and away behind them. */
-  BAT_COUNT: 14,
+  BAT_COUNT: 6,
   BAT_SPEED: 8,
   BAT_SCATTER_M: 0.7,
   BAT_FLAP_HZ: 11,
-  BAT_SIZE_M: 0.38,
+  BAT_SIZE_M: 0.25,
   BAT_GAIN: 0.4,
   /** The rock mesh is split into square chunks of this many cells so off-screen parts are culled and the rest drawn front to back. */
   CAVE_CHUNK_CELLS: 4,
@@ -453,7 +535,7 @@ export const CONFIG = {
   // ---------------- Audio output ----------------
   MASTER_VOLUME: 0.8,
   /**
-   * A cold draft from the way out (replaced the M4 chime: cave-native, quieter, rarer). The gold arrows,
+   * A cold draft from the way out (replaced the M4 chime: cave-native, quieter, rarer). The wall arrows,
    * lit by pulses, are the reliable guide; the draft only says "this side".
    */
   DRAFT_INTERVAL_MS: 5000,

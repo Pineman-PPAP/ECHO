@@ -11,8 +11,8 @@ const PROMPTS: Record<TutorialStep, string> = {
   loudness: 'Short, sharp sounds paint the dark. Try a soft tongue click… then a LOUD clap.',
   look: 'Turn your head left or right to look around.',
   walk: 'Lean toward the screen to walk. Sit back to stop.',
-  hum: 'Hum a steady note. Higher hum = narrow beam, lower hum = wide beam.',
-  exit: 'Clap: the gold arrows on the floor lead to the way out.',
+  hum: 'Hum a steady note: the fireflies in your jar wake up and light the cave around you.',
+  exit: 'Follow the scratched red arrows on the walls. Clap to see them clearly.',
 };
 
 /** Shown after the prompt in ?sim=1 only. */
@@ -21,7 +21,7 @@ const SIM_KEYS: Record<TutorialStep, string> = {
   loudness: '[Shift+Space, then Space]',
   look: '[← →]',
   walk: '[↑]',
-  hum: '[hold H, use [ and ]]',
+  hum: '[hold H]',
   exit: '',
 };
 
@@ -69,7 +69,7 @@ export class Tutorial {
         if (p.distanceWalked - this.distanceAtStepStart >= CONFIG.TUTORIAL_WALK_M) this.advance();
         break;
       case 'hum':
-        if (intent.beam) this.humMs += dtS * 1000;
+        if (intent.hum) this.humMs += dtS * 1000;
         if (this.humMs >= CONFIG.TUTORIAL_HUM_MS) this.advance();
         break;
       case 'exit':

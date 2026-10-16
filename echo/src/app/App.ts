@@ -419,6 +419,7 @@ export class App {
   }
 
   private enterPlaying(nowMs: number): void {
+    this.renderer.showJarOnce((nowMs - this.appStartMs) / 1000);
     this.levelStartMs = nowMs;
     this.nextDraftMs = nowMs + 1000;
     this.sfx?.confirm();
@@ -616,12 +617,12 @@ export class App {
     this.hud.update({
       levelName: this.world.level.def.name,
       objective: this.world.monstersEnabled
-        ? 'Escape. Clap to light the gold arrows. They hear every clap.'
-        : 'Find the way out. Clap to light the gold arrows.',
+        ? 'Follow the red wall arrows. Claps reveal them—and tell the Hollows where you are.'
+        : 'Find the way out. Follow the scratched red arrows on the walls.',
       prompt: playing ? this.hudPrompt(nowMs) : '',
       facePresent: intent.facePresent,
       micAboveDb: frames ? frames.mic.aboveDb : null,
-      humHz: intent.beam ? (this.sim ? this.sim.pitchHz : (frames?.mic.humPitchHz ?? null)) : null,
+      humHz: intent.hum ? (this.sim ? this.sim.pitchHz : (frames?.mic.humPitchHz ?? null)) : null,
       sim: this.sim !== null,
     });
     this.overlays.update({

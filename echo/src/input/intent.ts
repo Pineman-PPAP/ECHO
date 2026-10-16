@@ -1,4 +1,4 @@
-import type { BeamParams } from './mapping';
+import type { HumParams } from './mapping';
 
 /**
  * Everything the game needs from the player for one frame. Produced by IntentBuilder (real sensors)
@@ -16,8 +16,8 @@ export interface PlayerIntent {
   moveSpeed: number;
   /** Loudness (0.05..1.5) of every sharp sound (clap / click / shout) detected this frame. Usually empty. */
   pulses: number[];
-  /** Beam parameters while humming, else null. */
-  beam: BeamParams | null;
+  /** The hum (wakes the fireflies in the jar) while humming, else null. */
+  hum: HumParams | null;
   /** True only on the frame a hum starts (menus use it as a second "button"). */
   humStarted: boolean;
 }
@@ -30,7 +30,7 @@ export function idleIntent(): PlayerIntent {
     turnRate: 0,
     moveSpeed: 0,
     pulses: [],
-    beam: null,
+    hum: null,
     humStarted: false,
   };
 }

@@ -15,7 +15,7 @@ interface Slot {
 }
 
 /**
- * Monsters are NEVER drawn live (only a Hollow's eyes are, see EyeGlow). A pulse wavefront or the beam
+ * Monsters are NEVER drawn live (only a Hollow's eyes are, see EyeGlow). A pulse wavefront or the jar light
  * leaves an "afterimage" where the creature was at that instant, in the pose it was caught in, which
  * then breaks up and fades: red for a Hollow, pale and eyeless for the Hush. If it moves while you
  * blink, the afterimage stays behind.

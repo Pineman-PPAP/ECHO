@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
-import { cellCenter, worldToCell, yawForward } from '../src/game/grid';
-import { guidePoint, guideTrail } from '../src/game/guide';
+import { cellCenter, findPath, isWall, worldToCell, yawForward } from '../src/game/grid';
+import { guidePoint, guideTrail, wallGuideMarks } from '../src/game/guide';
 import { LEVELS } from '../src/game/levels';
 import { World } from '../src/game/World';
+
+describe('permanent wall arrows', () => {
+  for (const def of LEVELS) {
+    it(`${def.id}: sits on real walls and points along an open exit route`, () => {
+      const world = new World(def);
+      const marks = wallGuideMarks(world.level);
+      expect(marks.length).toBeGreaterThan(0);
+      expect(wallGuideMarks(world.level)).toEqual(marks);
+      for (const mark of marks) {
+        expect(isWall(world.level, mark.cell.c, mark.cell.r)).toBe(false);
+        expect(isWall(world.level, mark.cell.c + mark.wx, mark.cell.r + mark.wz)).toBe(true);
+        const next = findPath(world.level, mark.cell, world.level.exit)![0];
+        expect(next).toBeDefined();
+        // Project the painted arrow back into world space: it must match the next route step.
+        expect(-mark.wz * mark.direction + 0).toBe(next.c - mark.cell.c);
+        expect(mark.wx * mark.direction + 0).toBe(next.r - mark.cell.r);
+      }
+    });
+  }
+});
 
 describe('guidePoint', () => {
   it('points along the route, not straight at the exit', () => {

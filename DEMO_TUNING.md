@@ -33,7 +33,7 @@ The first T1 run failed only because of the power state: inference took 33 ms in
 |---|---|
 | Face tracking | 30 fps, 15–27 ms, GPU |
 | Render | 66–90 fps at `RENDER_SCALE` 0.75 (47 fps at 1.0, too low) |
-| Hum | low about 130 Hz → beam 30°; about 150 Hz → 27°; 273 Hz → 10° (`BEAM_MAX_PITCH_HZ` 300, `YIN_MAX_APERIODICITY` 0.3) |
+| Hum | 124-273 Hz detected reliably (`YIN_MAX_APERIODICITY` 0.3); wakes the firefly jar. Pitch only changes how excited the fireflies look (`HUM_LOW/HIGH_PITCH_HZ` 110-300) |
 | Calibration | `leftSign 1 · leak false · 0 warnings` |
 | Blink | 11/11 counted, open score 0.16 |
 | Head yaw | centre -1°, right about -20°, left about +20° |
@@ -45,7 +45,7 @@ The first T1 run failed only because of the power state: inference took 33 ms in
 
 - The noise floor will be about **-50 to -40 dB** instead of -70. The onset detector already handles that: a test guarantees that soft claps and tongue clicks 20 dB above a -43 dB floor still register.
 - `FLOOR_MIN_DB` was raised from -100 to -68 to stop faint noises triggering pulses in a silent bedroom. **In the hall it has no effect.** Leave it as is.
-- New risks: people clapping, shouting or laughing nearby; chatter turning on the hum beam; speakers on other stands.
+- New risks: people clapping, shouting or laughing nearby; chatter waking the firefly jar; speakers on other stands.
 - **Headphones are required.** In a loud room you'd turn the speakers up, and the game's own sounds would leak into the mic.
 
 ## 4. Symptom → fix (in this order)
@@ -57,8 +57,8 @@ Read the debug panel (`?debug=1`, or press the backtick key `` ` ``) before chan
 | Neighbours' claps or voices fire pulses | ② `floor` and EVENTS `PULSE loudness` values | First: sit closer to the laptop and recalibrate. Then `ONSET_MIN_ABOVE_FLOOR_DB` 14 → 17 (careful: the "soft clap in a noisy room" test may then need to be revisited; don't delete it) |
 | Talking or laughter fires pulses | as above | `ONSET_RISE_DB` 15 → 18 (same test caveat) |
 | Your claps are missed | ② `above floor` when you clap | Clap closer to the mic or harder. Then `ONSET_MIN_ABOVE_FLOOR_DB` 14 → 11 |
-| Chatter turns the beam on | ② `hum ON` while you're silent | `HUM_MAX_PITCH_SPREAD_OCT` 0.15 → 0.1, or `HUM_MIN_ABOVE_FLOOR_DB` 10 → 13 |
-| Your hum doesn't turn the beam on | ② `pitch`, `hum`, `above floor` | Hum louder and closer. `HUM_MIN_ABOVE_FLOOR_DB` 10 → 8, `HUM_ATTACK_MS` 100 → 70 |
+| Chatter wakes the fireflies | ② `hum ON` while you're silent | `HUM_MAX_PITCH_SPREAD_OCT` 0.15 → 0.1, or `HUM_MIN_ABOVE_FLOOR_DB` 10 → 13 |
+| Your hum doesn't wake the fireflies | ② `pitch`, `hum`, `above floor` | Hum louder and closer. `HUM_MIN_ABOVE_FLOOR_DB` 10 → 8, `HUM_ATTACK_MS` 100 → 70 |
 | Hum flickers off mid-note | ② `hum ON/off` flicker | `HUM_RELEASE_MS` 180 → 260 |
 | Face lost or flickering (game keeps pausing) | ① `face ✓` and fps | Light the face from the front; avoid a bright window behind you |
 | Low fps / laggy | ① inference ms, ④ `render NN fps` | Redo section 1 (charger plugged in, performance mode, other apps closed). Then `FACE_DELEGATE` 'GPU' vs 'CPU' |

@@ -3,7 +3,7 @@ import type { MonsterState } from './Monster';
 
 /**
  * How a Hollow is caught standing when you see it. You only ever see it in flashes (a pulse or the
- * beam), so every glimpse is a still pose; a new spot (or a closer distance) means a new pose. That is
+ * jar light), so every glimpse is a still pose; a new spot (or a closer distance) means a new pose. That is
  * what sells "it moved".
  */
 export type PoseId = 'stand' | 'stalk' | 'crouch' | 'reach' | 'lunge';
@@ -30,7 +30,7 @@ function variant(id: number, a: number, b: number): number {
  *   hunting (alert): stalking or crouched
  *   searching: crouched or standing, head tilted
  *   idle / scripted walk: standing
- * The choice is fixed per POSE_CELL_M square, so the beam's repeated reveals don't flicker between poses.
+ * The choice is fixed per POSE_CELL_M square, so the jar's repeated reveals don't flicker between poses.
  */
 export function choosePose(state: MonsterState, distanceM: number, id: number, x: number, z: number): PoseChoice {
   const v = variant(id, Math.floor(x / CONFIG.POSE_CELL_M), Math.floor(z / CONFIG.POSE_CELL_M));

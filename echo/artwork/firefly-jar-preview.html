@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECHO · Firefly jar asset review</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #080b0c; color: #d9d6cc; font: 14px system-ui, sans-serif; }
+  header { padding: 24px 32px; border-bottom: 1px solid #282d28; }
+  small { color: #b7c594; letter-spacing: 3px; font-size: 10px; }
+  h1 { font: 28px Georgia, serif; margin: 9px 0; }
+  p { color: #9b9f95; margin: 8px 0; line-height: 1.6; }
+  #stage { height: 66vh; min-height: 360px; }
+  canvas { display: block; width: 100%; height: 100%; }
+  footer { border-top: 1px solid #282d28; padding: 18px 32px; display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+  label { display: flex; gap: 12px; align-items: center; }
+  input { accent-color: #c8d798; }
+  button { background: #141a16; border: 1px solid #505947; color: #d9d6cc; padding: 10px 15px; cursor: pointer; }
+  .note { padding: 0 32px 16px; font-size: 12px; }
+</style>
+<header>
+  <small>ECHO / ARTWORK REVIEW</small>
+  <h1>A little light in the dark.</h1>
+  <p>Live fireflies, textured hand and weathered glass. The jar stays held on screen during gameplay; this isolated developer preview lets you inspect its glow and framing.</p>
+</header>
+<div id="stage"></div>
+<footer>
+  <label>Glow <input id="glow" type="range" min="0" max="1" step="0.01" value="0.75"></label>
+  <label>Pitch excitement <input id="pitch" type="range" min="0" max="1" step="0.01" value="0.3"></label>
+  <button id="frame">Show gameplay framing</button>
+  <button id="fallback">Show original geometry</button>
+</footer>
+<p class="note">Visual review only. No camera/mic permissions, game-state changes, or runtime dependencies added.</p>
+<script type="module">
+  import * as THREE from 'three';
+  import { FireflyJarView } from '/src/render/FireflyJarView.ts';
+  import { CONFIG } from '/src/config.ts';
+  const stage = document.querySelector('#stage');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x080b0c);
+  stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10);
+  const jar = new FireflyJarView(scene);
+  const oldJar = new FireflyJarView(scene, false);
+  let closeup = true;
+  let original = false;
+  let last = performance.now();
+  const start = last;
+  document.querySelector('#frame').onclick = (e) => {
+    closeup = !closeup;
+    e.target.textContent = closeup ? 'Show gameplay framing' : 'Show close-up';
+  };
+  document.querySelector('#fallback').onclick = (e) => {
+    original = !original;
+    e.target.textContent = original ? 'Show new artwork' : 'Show original geometry';
+  };
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, CONFIG.MAX_DT_S);
+    last = now;
+    const time = (now - start) / 1000;
+    const width = stage.clientWidth, height = stage.clientHeight;
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.fov = closeup ? 40 : CONFIG.CAMERA_FOV_DEG;
+    camera.updateProjectionMatrix();
+    for (const view of [jar, oldJar]) {
+      view.root.position.set(closeup ? 0.33 : 0, closeup ? 0.18 : 0, 0);
+      view.update(dt, time, Number(document.querySelector('#glow').value), Number(document.querySelector('#pitch').value), 0, 0, 1);
+    }
+    jar.root.visible = !original;
+    oldJar.root.visible = original;
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</html>

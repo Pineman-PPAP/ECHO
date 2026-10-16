@@ -3,7 +3,7 @@ import { facingToYaw } from '../src/game/grid';
 import { LEVELS } from '../src/game/levels';
 import { Tutorial } from '../src/game/Tutorial';
 import { World } from '../src/game/World';
-import { beamFromHum } from '../src/input/mapping';
+import { humFromMic } from '../src/input/mapping';
 import { intent } from './helpers';
 
 const DT = 1 / 60;
@@ -40,10 +40,10 @@ describe('Tutorial', () => {
     for (let i = 0; i < 600 && world.player.distanceWalked - start < 4.05; i++) tick({ moveSpeed: 2.4 });
     expect(tutorial.step).toBe('hum');
 
-    const beam = beamFromHum(30, 220, 30);
-    for (let i = 0; i < 96; i++) tick({ beam });
+    const hum = humFromMic(30, 220, 30);
+    for (let i = 0; i < 96; i++) tick({ hum });
     expect(tutorial.step).toBe('exit');
-    for (let i = 0; i < 60; i++) tick({ pulses: [1], beam });
+    for (let i = 0; i < 60; i++) tick({ pulses: [1], hum });
     expect(tutorial.step).toBe('exit');
   });
 

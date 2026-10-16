@@ -44,35 +44,25 @@ export function pulseRadius(loudness: number): number {
   return CONFIG.PULSE_MIN_RADIUS + (CONFIG.PULSE_MAX_RADIUS - CONFIG.PULSE_MIN_RADIUS) * t;
 }
 
-export interface BeamParams {
-  halfAngleRad: number;
-  range: number;
-  /** 0..1 brightness */
-  strength: number;
+export interface HumParams {
   /** 0..1.3 hum loudness relative to the calibrated hum */
   level: number;
+  /** 0..1: where the pitch sits between HUM_LOW_PITCH_HZ and HUM_HIGH_PITCH_HZ (log scale) */
+  pitch01: number;
 }
 
 /**
- * Hum -> beam. Pitch sets width (higher = narrower, like real sonar: high frequencies are more
- * directional). Loudness sets range and brightness.
+ * Hum -> firefly jar. Loudness wakes the fireflies (brighter, wider light); pitch excites them
+ * (a higher note makes them swirl and blink faster).
  */
-export function beamFromHum(aboveDb: number, pitchHz: number, humRefAboveDb: number): BeamParams {
+export function humFromMic(aboveDb: number, pitchHz: number, humRefAboveDb: number): HumParams {
   const lo = CONFIG.HUM_MIN_ABOVE_FLOOR_DB;
   const level = clamp((aboveDb - lo) / Math.max(humRefAboveDb - lo, 6), 0, 1.3);
-  const p = clamp(
-    (Math.log2(Math.max(pitchHz, 1)) - Math.log2(CONFIG.BEAM_MIN_PITCH_HZ)) /
-      (Math.log2(CONFIG.BEAM_MAX_PITCH_HZ) - Math.log2(CONFIG.BEAM_MIN_PITCH_HZ)),
+  const pitch01 = clamp(
+    (Math.log2(Math.max(pitchHz, 1)) - Math.log2(CONFIG.HUM_LOW_PITCH_HZ)) /
+      (Math.log2(CONFIG.HUM_HIGH_PITCH_HZ) - Math.log2(CONFIG.HUM_LOW_PITCH_HZ)),
     0,
     1,
   );
-  const halfAngleDeg =
-    CONFIG.BEAM_WIDE_HALF_ANGLE_DEG + (CONFIG.BEAM_NARROW_HALF_ANGLE_DEG - CONFIG.BEAM_WIDE_HALF_ANGLE_DEG) * p;
-  const l01 = Math.min(level, 1);
-  return {
-    halfAngleRad: halfAngleDeg * DEG2RAD,
-    range: CONFIG.BEAM_MIN_RANGE + (CONFIG.BEAM_MAX_RANGE - CONFIG.BEAM_MIN_RANGE) * l01,
-    strength: 0.35 + 0.65 * l01,
-    level,
-  };
+  return { level, pitch01 };
 }
