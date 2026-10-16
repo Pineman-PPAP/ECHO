@@ -470,7 +470,6 @@ export class App {
           break;
         case 'caught':
           this.levelStats = this.measureLevel(nowMs);
-          this.renderer.hideJumpscare(); // the Stalker's stare, if it was up
           this.sfx?.stalkerStop();
           this.sfx?.thud();
           const video = this.jumpVideo.ready;
@@ -522,13 +521,12 @@ export class App {
             this.momentPrompt = { text: STALKER_WARN_PROMPT, untilMs: nowMs + CONFIG.STALKER_WARN_MS };
           }
           if (e.what === 'stare') {
-            this.renderer.showStare(clockS);
+            this.renderer.shake(CONFIG.STALKER_STARE_SHAKE_M, CONFIG.STALKER_STARE_SHAKE_S, clockS);
             this.overlays.flash();
             this.sfx?.stalkerHit();
             this.momentPrompt = { text: STALKER_STARE_PROMPT, untilMs: nowMs + CONFIG.STALKER_STARE_MS };
           }
           if (e.what === 'spared') {
-            this.renderer.hideJumpscare();
             this.sfx?.stalkerExhale();
             this.momentPrompt = { text: STALKER_SPARED_PROMPT, untilMs: nowMs + CONFIG.MOMENT_PROMPT_MS };
           }

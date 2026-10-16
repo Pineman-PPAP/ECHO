@@ -242,8 +242,6 @@ export const CONFIG = {
   HOLLOW_HEIGHT_M: 2.45,
   HOLLOW_CROUCH_HEIGHT_M: 1.6,
   HOLLOW_CATCH_SIZE_M: 1.8,
-  HOLLOW_CATCH_SCREEN_HEIGHT: 1.8,
-  HOLLOW_CATCH_FACE_V: 0.43,
   HOLLOW_EYE_FORWARD_M: 0.02,
   HOLLOW_ART_EXPOSURE: 0.85,
   HOLLOW_ART_EDGE_COLOR: 0x852824,
@@ -490,9 +488,9 @@ export const CONFIG = {
   /** If you stay still it walks away at LEAVE_SPEED and is gone at LEAVE_M. */
   STALKER_LEAVE_SPEED: 2.4,
   STALKER_LEAVE_M: 14,
-  /** The stare face: frozen this far into the catch leap (0..1), flickering on this share of frames. */
-  STALKER_STARE_LEAP_T: 0.72,
-  STALKER_STARE_FLICKER: 0.06,
+  /** When it arrives for the stare (unseen, right in front of you) the view jolts this much (m) for this long (s). */
+  STALKER_STARE_SHAKE_M: 0.06,
+  STALKER_STARE_SHAKE_S: 0.35,
   /** Sound: one heavy step per STRIDE_M walked; the rising dread under it at full intensity; the hit when the face appears. */
   STALKER_STRIDE_M: 1.3,
   STALKER_STEP_GAIN: 1.1,
@@ -526,12 +524,6 @@ export const CONFIG = {
   MENU_INPUT_DELAY_MS: 1000,
   /** A level's intro card continues by itself after this long if the player doesn't clap. */
   INTRO_AUTO_MS: 7000,
-  /** The 3D figure (now only the Stalker's stare) leaps from JUMPSCARE_FROM_M to JUMPSCARE_TO_M in front of your face in JUMPSCARE_LEAP_MS, */
-  JUMPSCARE_FROM_M: 3.2,
-  JUMPSCARE_TO_M: 0.3,
-  JUMPSCARE_LEAP_MS: 200,
-  /** After impact this share of frames drop it (a flicker). */
-  JUMPSCARE_FLICKER: 0.3,
   JUMPSCARE_MS: 2000,
   /**
    * Caught: the filmed jumpscare (public/jumpscare.mp4) plays at once, full screen, with a thud

@@ -13,8 +13,6 @@ export const COLORS = {
   /** Hollows: a deep blood red (the echo shader makes the edges glow), with hot pinpoint eyes. */
   monster: 0xe0221a,
   monsterEyes: 0xff7a5c,
-  /** White-hot pinpoints in the jumpscare. */
-  jumpscareEyes: 0xffe2d6,
   /** The Hush: pale, cold, eyeless. */
   hush: 0xbfe6ff,
 } as const;

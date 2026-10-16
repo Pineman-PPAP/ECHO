@@ -3,20 +3,17 @@ import { CONFIG } from '../config';
 import type { Level } from '../game/grid';
 import type { World } from '../game/World';
 import { Afterimages } from './Afterimages';
-import type { Creature } from '../game/World';
-import { buildLevelMeshes, COLORS } from './buildLevelMesh';
+import { buildLevelMeshes } from './buildLevelMesh';
 import { CaveLife } from './CaveLife';
 import { EyeGlow } from './EyeGlow';
 import { FireflyJarView } from './FireflyJarView';
 import { GuideTrail } from './GuideTrail';
 import { NearDust } from './NearDust';
 import { PotsView } from './Pots';
-import { createEchoMaterial, createMonsterModel, setPose, type HollowFigure } from './monsterModel';
-import { artworkTexture } from './hollowArtwork';
 import { createRevealUniforms, type RevealUniforms } from './revealMaterial';
 
 /**
- * Owns the three.js renderer, scene, first-person camera, afterimages and jumpscare.
+ * Owns the three.js renderer, scene, first-person camera and afterimages (the jumpscare is a video, ui/JumpscareVideo).
  * Reads World state each frame; never mutates game state.
  */
 export class Renderer {
@@ -45,14 +42,7 @@ export class Renderer {
   private lastFrameMs = 0;
   private shakeUntilS = 0;
   private shakeAmp = 0;
-  private jumpscare: { fig: HollowFigure; body: THREE.ShaderMaterial; eyes: THREE.MeshBasicMaterial; startS: number; hit: boolean; stare: boolean } | null = null;
-  /**
-   * The jumpscare is drawn in a second pass after clearing depth, so it is never hidden by rock (it is
-   * wider than the tunnel) yet its own parts still hide each other. jumpRoot follows the camera.
-   */
-  private readonly jumpScene = new THREE.Scene();
-  private readonly jumpRoot = new THREE.Group();
-  /** The firefly jar in the left hand: its own pass after the cave (cleared depth), before the jumpscare. */
+  /** The firefly jar in the left hand: its own pass after the cave (cleared depth). */
   private readonly jarScene = new THREE.Scene();
   private readonly jar = new FireflyJarView(this.jarScene);
   private readonly jarPos = new THREE.Vector3();
@@ -75,8 +65,6 @@ export class Renderer {
     this.caveLife = new CaveLife(this.scene, this.uniforms);
     this.nearDust = new NearDust(this.scene, this.uniforms);
     this.pots = new PotsView(this.scene, this.uniforms);
-    this.jumpScene.add(this.jumpRoot);
-    artworkTexture('lunge'); // Preload the catch portrait during the title/calibration screens.
   }
 
   loadLevel(level: Level): void {
@@ -92,77 +80,6 @@ export class Renderer {
     this.afterimages.clear();
     this.eyes.clear();
     this.guide.setLevel(level, this.levelGroup);
-    this.hideJumpscare();
-  }
-
-  /**
-   * The catch: it leaps out of the dark at your face, jaw open (or the pale Hush), drawn over
-   * everything. App cuts to black a moment later.
-   */
-  showJumpscare(clockS: number, who: Creature = 'hollow'): void {
-    if (!this.jumpscare) {
-      const body = createEchoMaterial(COLORS.monster, 'solid');
-      const eyes = new THREE.MeshBasicMaterial({ color: COLORS.jumpscareEyes });
-      // The model faces +z and the camera looks down -z, so unrotated it faces the player.
-      const fig = createMonsterModel(body, eyes, { pose: 'lunge', mirror: false });
-      this.jumpRoot.add(fig.group);
-      this.jumpscare = { fig, body, eyes, startS: clockS, hit: false, stare: false };
-    }
-    this.jumpscare.startS = clockS;
-    this.jumpscare.hit = false;
-    this.jumpscare.stare = false;
-    setPose(this.jumpscare.fig, { pose: 'lunge', mirror: false }, who);
-    this.jumpscare.body.transparent = this.jumpscare.fig.artwork;
-    this.jumpscare.body.depthWrite = !this.jumpscare.fig.artwork;
-    this.jumpscare.body.uniforms.uColor.value.setHex(who === 'hush' ? COLORS.hush : COLORS.monster);
-    this.jumpscare.eyes.color.setHex(who === 'hush' ? 0x000000 : COLORS.jumpscareEyes);
-    this.placeJumpscare(clockS);
-    this.jumpscare.fig.group.visible = true;
-  }
-
-  /**
-   * The Stalker's stare: the catch face appears right in front of you and holds there, breathing, not
-   * leaping. App hides it when the Stalker turns away, or turns it into the real catch.
-   */
-  showStare(clockS: number): void {
-    this.showJumpscare(clockS);
-    const j = this.jumpscare!;
-    j.stare = true;
-    j.hit = true;
-    this.shake(0.06, 0.35, clockS);
-  }
-
-  hideJumpscare(): void {
-    if (this.jumpscare) this.jumpscare.fig.group.visible = false;
-  }
-
-  /** Leap: from JUMPSCARE_FROM_M to JUMPSCARE_TO_M ahead with an ease-in (it accelerates at you), then shake on impact. */
-  private placeJumpscare(clockS: number): void {
-    const j = this.jumpscare;
-    if (!j || !j.fig.group.visible) return;
-    // The stare holds still part-way into the leap, swaying a little as it breathes.
-    const t = j.stare
-      ? CONFIG.STALKER_STARE_LEAP_T * (1 + 0.015 * Math.sin((clockS - j.startS) * 2.1))
-      : Math.min(Math.max((clockS - j.startS) / (CONFIG.JUMPSCARE_LEAP_MS / 1000), 0), 1);
-    const dist = CONFIG.JUMPSCARE_FROM_M + (CONFIG.JUMPSCARE_TO_M - CONFIG.JUMPSCARE_FROM_M) * t * t;
-    // The lunge pose's skull is 0.34 m in front of its feet and 1.72 m up: put it at eye level, `dist` ahead.
-    if (j.fig.artwork) {
-      // The face fills the viewport on impact while its eyes and mouth remain inside the frame.
-      const impactHeight = 2 * CONFIG.JUMPSCARE_TO_M * Math.tan(CONFIG.CAMERA_FOV_DEG * Math.PI / 360)
-        * CONFIG.HOLLOW_CATCH_SCREEN_HEIGHT;
-      const height = CONFIG.HOLLOW_CATCH_SIZE_M + (impactHeight - CONFIG.HOLLOW_CATCH_SIZE_M) * t * t;
-      j.fig.group.position.set(0, -height * (1 - CONFIG.HOLLOW_CATCH_FACE_V), -dist);
-      j.fig.group.scale.setScalar(height / CONFIG.HOLLOW_CATCH_SIZE_M);
-    } else {
-      j.fig.group.position.set(0, -1.72, -dist - 0.34);
-      j.fig.group.scale.setScalar(1);
-    }
-    if (t >= 1 && !j.hit) {
-      j.hit = true;
-      this.shake(0.1, 0.5, clockS);
-    }
-    // After impact it flickers (random dropped frames), so the eye never gets a calm look at it.
-    j.fig.body.visible = j.fig.eyes.visible = j.stare ? Math.random() > CONFIG.STALKER_STARE_FLICKER : t < 1 || Math.random() > CONFIG.JUMPSCARE_FLICKER;
   }
 
   /** Raises the jar on first play; it stays held from then on. Later calls don't restart the lift. */
@@ -178,7 +95,7 @@ export class Renderer {
     return k * k * (3 - 2 * k);
   }
 
-  /** Camera shake for jumpscares. */
+  /** Camera shake (the Stalker's face arriving). */
   shake(amplitude: number, durationS: number, clockS: number): void {
     this.shakeAmp = amplitude;
     this.shakeUntilS = clockS + durationS;
@@ -202,7 +119,6 @@ export class Renderer {
       this.camera.position.y += (Math.random() - 0.5) * this.shakeAmp;
     }
 
-    this.placeJumpscare(clockS);
     this.afterimages.update(clockS);
     this.eyes.update(world.eyes(), clockS);
     this.caveLife.update(clockS);
@@ -228,14 +144,6 @@ export class Renderer {
       this.gl.autoClear = false;
       this.gl.clearDepth();
       this.gl.render(this.jarScene, this.camera);
-      this.gl.autoClear = true;
-    }
-    if (this.jumpscare?.fig.group.visible) {
-      this.jumpRoot.position.copy(this.camera.position);
-      this.jumpRoot.quaternion.copy(this.camera.quaternion);
-      this.gl.autoClear = false;
-      this.gl.clearDepth();
-      this.gl.render(this.jumpScene, this.camera);
       this.gl.autoClear = true;
     }
   }
