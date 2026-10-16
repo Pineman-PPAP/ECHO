@@ -29,8 +29,8 @@ type State =
   | { kind: 'intro' }
   | { kind: 'playing' }
   | { kind: 'paused'; faceBackSinceMs: number | null }
-  /** video: the filmed jumpscare took over on impact (false = the 3D one runs alone); cutAtMs: when it cut to black. */
-  | { kind: 'caught'; hit: boolean; cut: boolean; video: boolean; shown: boolean; cutAtMs: number }
+  /** video: the filmed jumpscare is playing (false = it couldn't: just black); cutAtMs: when it cut to black. */
+  | { kind: 'caught'; video: boolean; cut: boolean; cutAtMs: number }
   | { kind: 'gameover' }
   | { kind: 'escaped' }
   | { kind: 'victory' };
@@ -236,38 +236,18 @@ export class App {
         break;
 
       case 'caught': {
-        // Leap, one white frame on impact, a hard cut to black and silence, then the card. When the
-        // filmed jumpscare is loaded it starts under the white frame and replaces the 3D figure.
+        // The clip plays out (started with the thud when you were caught), then a hard cut to black
+        // and silence, then the card. If it can't play, it's just the thud and black.
         this.card.hide();
         const since = nowMs - this.stateSinceMs;
-        if (!s.hit && since >= CONFIG.JUMPSCARE_LEAP_MS) {
-          s.hit = true;
-          this.overlays.whiteFlash();
-          if (this.jumpVideo.ready) {
-            s.video = true;
-            this.jumpVideo.play();
-          }
-        }
-        if (s.video && !s.cut) {
-          if (this.jumpVideo.failed) {
-            s.video = false; // refused or broken: the 3D jumpscare carries on
-            this.jumpVideo.hide();
-          } else if (!s.shown && this.jumpVideo.playing) {
-            s.shown = true;
-            this.renderer.hideJumpscare();
-            this.sfx?.fadeScream(CONFIG.JUMPSCARE_SCREAM_FADE_S);
-          }
-        }
-        const cutDue = s.video
-          ? this.jumpVideo.ended || since >= CONFIG.JUMPSCARE_LEAP_MS + CONFIG.JUMPSCARE_VIDEO_MS
-          : since >= CONFIG.JUMPSCARE_CUT_MS;
+        if (s.video && !s.cut && this.jumpVideo.failed) s.video = false;
+        const cutDue = !s.video || this.jumpVideo.ended || since >= CONFIG.JUMPSCARE_VIDEO_MS;
         if (!s.cut && cutDue) {
           s.cut = true;
           s.cutAtMs = nowMs;
-          this.renderer.hideJumpscare();
           this.jumpVideo.hide();
           this.overlays.setBlackout(true);
-          this.sfx?.silence(true);
+          if (s.video) this.sfx?.silence(true);
         }
         const overDue = s.video ? s.cut && nowMs - s.cutAtMs >= CONFIG.JUMPSCARE_VIDEO_BLACK_MS : since >= CONFIG.JUMPSCARE_MS;
         if (overDue) this.setState({ kind: 'gameover' }); // lifts the blackout and silence
@@ -490,12 +470,13 @@ export class App {
           break;
         case 'caught':
           this.levelStats = this.measureLevel(nowMs);
-          this.renderer.showJumpscare(clockS, e.by === 'hush' ? 'hush' : 'hollow');
+          this.renderer.hideJumpscare(); // the Stalker's stare, if it was up
           this.sfx?.stalkerStop();
-          if (e.by === 'hush') this.sfx?.hushScream();
-          else this.sfx?.scream();
+          this.sfx?.thud();
+          const video = this.jumpVideo.ready;
+          if (video) this.jumpVideo.play();
           this.debug.log(nowMs, e.by === 'hush' ? 'CAUGHT by the Hush' : e.by === 'stalker' ? 'CAUGHT by the Stalker' : `CAUGHT by #${e.monsterId}`);
-          this.setState({ kind: 'caught', hit: false, cut: false, video: false, shown: false, cutAtMs: 0 });
+          this.setState({ kind: 'caught', video, cut: false, cutAtMs: 0 });
           break;
         case 'alerted':
           // It heard you: a red flash and dry clicks from where it stands.

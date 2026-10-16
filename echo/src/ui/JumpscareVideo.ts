@@ -4,7 +4,7 @@ import { grainTexture } from './Overlays';
  * The filmed jumpscare (public/jumpscare.mp4): a full-screen clip over the game, under the white
  * frame and the blackout, with the game's own film grain and dark edges on top so it reads as part
  * of the cave. It preloads at startup; if it isn't ready, or the browser refuses to play it, the
- * caller keeps the 3D jumpscare instead.
+ * caller cuts to black instead.
  */
 export class JumpscareVideo {
   readonly video: HTMLVideoElement;
@@ -32,7 +32,6 @@ export class JumpscareVideo {
     this.video.addEventListener('playing', () => {
       if (!this.started) return;
       this._playing = true;
-      this.wrap.hidden = false;
       this.wrap.classList.remove('jolt');
       void this.wrap.offsetWidth;
       this.wrap.classList.add('jolt');
@@ -45,12 +44,12 @@ export class JumpscareVideo {
     return this.video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA && !this.video.error;
   }
 
-  /** True once frames are actually on screen (the 3D figure can go). */
+  /** True once frames are actually on screen. */
   get playing(): boolean {
     return this._playing;
   }
 
-  /** play() was refused or the clip errored: fall back to the 3D jumpscare. */
+  /** play() was refused or the clip errored. */
   get failed(): boolean {
     return this._failed || !!this.video.error;
   }
@@ -64,6 +63,7 @@ export class JumpscareVideo {
     this._playing = false;
     this._failed = false;
     this.video.currentTime = 0;
+    this.wrap.hidden = false; // black until the first frame, so the cave never shows through
     this.video.play().catch(() => {
       this._failed = true;
     });

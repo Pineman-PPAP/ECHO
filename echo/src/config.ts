@@ -526,25 +526,23 @@ export const CONFIG = {
   MENU_INPUT_DELAY_MS: 1000,
   /** A level's intro card continues by itself after this long if the player doesn't clap. */
   INTRO_AUTO_MS: 7000,
-  /** Jumpscare: it leaps from JUMPSCARE_FROM_M to JUMPSCARE_TO_M in front of your face in JUMPSCARE_LEAP_MS, */
+  /** The 3D figure (now only the Stalker's stare) leaps from JUMPSCARE_FROM_M to JUMPSCARE_TO_M in front of your face in JUMPSCARE_LEAP_MS, */
   JUMPSCARE_FROM_M: 3.2,
   JUMPSCARE_TO_M: 0.3,
   JUMPSCARE_LEAP_MS: 200,
   /** After impact this share of frames drop it (a flicker). */
   JUMPSCARE_FLICKER: 0.3,
-  /** ...then a hard cut to black and silence at JUMPSCARE_CUT_MS, and the game-over card at JUMPSCARE_MS. */
-  JUMPSCARE_CUT_MS: 900,
   JUMPSCARE_MS: 2000,
   /**
-   * The filmed jumpscare (public/jumpscare.mp4) takes over on impact when it's loaded: the 3D leap
-   * and synth scream lead in, the scream fades out over JUMPSCARE_SCREAM_FADE_S under the clip's own
-   * audio (at JUMPSCARE_VIDEO_GAIN), and after JUMPSCARE_VIDEO_MS (the clip's length) it cuts to
-   * black and silence for JUMPSCARE_VIDEO_BLACK_MS before the game-over card.
+   * Caught: the filmed jumpscare (public/jumpscare.mp4) plays at once, full screen, with a thud
+   * (JUMPSCARE_THUD_GAIN) and the clip's own audio (JUMPSCARE_VIDEO_GAIN). After JUMPSCARE_VIDEO_MS
+   * (the clip's length) it cuts to black and silence for JUMPSCARE_VIDEO_BLACK_MS, then the card.
+   * If the clip can't play: just the thud and black for JUMPSCARE_MS.
    */
   JUMPSCARE_VIDEO_MS: 5500,
   JUMPSCARE_VIDEO_BLACK_MS: 600,
   JUMPSCARE_VIDEO_GAIN: 1.0,
-  JUMPSCARE_SCREAM_FADE_S: 0.25,
+  JUMPSCARE_THUD_GAIN: 1.0,
   /** Menus and the title screen emit a soft background pulse this often so the maze is visible behind cards. */
   ATTRACT_PULSE_MS: 2600,
   /** Non-tutorial levels show their hint line for this long after play starts. */

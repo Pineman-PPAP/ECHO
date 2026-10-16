@@ -19,6 +19,7 @@ const GATE = {
   alerted: 600,
   pot: 800,
   stalkerHit: 1200,
+  thud: 1200,
 };
 
 /** The Stalker's high scraping strings (Hz), a semitone apart. */
@@ -285,10 +286,39 @@ export class Sfx {
     this.ctx.createMediaElementSource(el).connect(g).connect(this.master);
   }
 
-  /** The filmed jumpscare takes over: the synth scream fades out under it. */
-  fadeScream(durS: number): void {
-    this.screamBus?.gain.setTargetAtTime(0, this.ctx.currentTime, durS / 3);
-    this.onSound(CONFIG.JUMPSCARE_VIDEO_MS);
+  /** You're caught: one heavy body-blow thud (sub drop, a dull knock and a short burst of low rumble) as the clip hits. */
+  thud(): void {
+    const t = this.ctx.currentTime;
+    const l = CONFIG.JUMPSCARE_THUD_GAIN;
+    const bus = this.newScreamBus();
+    const sub = this.ctx.createOscillator();
+    sub.frequency.setValueAtTime(110, t);
+    sub.frequency.exponentialRampToValueAtTime(32, t + 0.5);
+    const sg = this.ctx.createGain();
+    envelope(sg.gain, t, 0.003, l, 0.7);
+    sub.connect(sg).connect(bus);
+    sub.start(t);
+    sub.stop(t + 0.8);
+    const knock = this.ctx.createOscillator();
+    knock.type = 'triangle';
+    knock.frequency.setValueAtTime(190, t);
+    knock.frequency.exponentialRampToValueAtTime(70, t + 0.08);
+    const kg = this.ctx.createGain();
+    envelope(kg.gain, t, 0.001, l * 0.7, 0.12);
+    knock.connect(kg).connect(bus);
+    knock.start(t);
+    knock.stop(t + 0.2);
+    const n = this.noiseSource();
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t);
+    lp.frequency.exponentialRampToValueAtTime(120, t + 0.4);
+    const ng = this.ctx.createGain();
+    envelope(ng.gain, t, 0.002, l * 0.8, 0.45);
+    n.connect(lp).connect(ng).connect(bus);
+    n.start(t);
+    n.stop(t + 0.6);
+    this.onSound(GATE.thud);
   }
 
   /** The jumpscare's hard cut: the scream stops dead and everything goes quiet until silence(false). */
