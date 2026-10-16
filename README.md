@@ -7,6 +7,17 @@ No keyboard, no mouse, no controller: a webcam and a microphone are the whole in
 - **Every clap is a bet.** The Hollows are blind and hunt by sound: every creature in earshot runs to where you clapped. See the cave, then move.
 - **Humming is a quiet flashlight.** A steady hum shows only a narrow beam where your head points, but only a Hollow right next to you hears it.
 
+## Status: finished ✅
+
+ECHO is complete and playable start to finish, hands-free:
+
+- **Input:** face tracking (head turn + lean to walk) and audio (claps, clicks, hums), with a guided calibration for each new player.
+- **Game:** a tutorial and three levels (Awakening, The Listener, The Choir), blind Hollows that hunt by sound, the Hush, breakable pots and the Stalker.
+- **Look and sound:** sonar-lit rock caves, creature artwork, jumpscares and 3D positional audio.
+- **Quality:** typecheck + unit tests (`npm run check`) and the production build pass.
+
+Quick start: `cd echo && npm install && npm run assets && npm run dev`, then open http://127.0.0.1:5173 in Chrome with headphones on.
+
 ---
 
 ## Controls
