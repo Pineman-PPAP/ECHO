@@ -278,6 +278,19 @@ export class Sfx {
     return bus;
   }
 
+  /** Plays a media element's sound through the master bus, so silence() cuts it with everything else. Once per element. */
+  playThrough(el: HTMLMediaElement, gain: number): void {
+    const g = this.ctx.createGain();
+    g.gain.value = gain;
+    this.ctx.createMediaElementSource(el).connect(g).connect(this.master);
+  }
+
+  /** The filmed jumpscare takes over: the synth scream fades out under it. */
+  fadeScream(durS: number): void {
+    this.screamBus?.gain.setTargetAtTime(0, this.ctx.currentTime, durS / 3);
+    this.onSound(CONFIG.JUMPSCARE_VIDEO_MS);
+  }
+
   /** The jumpscare's hard cut: the scream stops dead and everything goes quiet until silence(false). */
   silence(on: boolean): void {
     const t = this.ctx.currentTime;

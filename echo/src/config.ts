@@ -535,6 +535,16 @@ export const CONFIG = {
   /** ...then a hard cut to black and silence at JUMPSCARE_CUT_MS, and the game-over card at JUMPSCARE_MS. */
   JUMPSCARE_CUT_MS: 900,
   JUMPSCARE_MS: 2000,
+  /**
+   * The filmed jumpscare (public/jumpscare.mp4) takes over on impact when it's loaded: the 3D leap
+   * and synth scream lead in, the scream fades out over JUMPSCARE_SCREAM_FADE_S under the clip's own
+   * audio (at JUMPSCARE_VIDEO_GAIN), and after JUMPSCARE_VIDEO_MS (the clip's length) it cuts to
+   * black and silence for JUMPSCARE_VIDEO_BLACK_MS before the game-over card.
+   */
+  JUMPSCARE_VIDEO_MS: 5500,
+  JUMPSCARE_VIDEO_BLACK_MS: 600,
+  JUMPSCARE_VIDEO_GAIN: 1.0,
+  JUMPSCARE_SCREAM_FADE_S: 0.25,
   /** Menus and the title screen emit a soft background pulse this often so the maze is visible behind cards. */
   ATTRACT_PULSE_MS: 2600,
   /** Non-tutorial levels show their hint line for this long after play starts. */

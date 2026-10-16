@@ -13,7 +13,7 @@ ECHO is complete and playable start to finish, hands-free:
 
 - **Input:** face tracking (head turn + lean to walk) and audio (claps, clicks, hums), with a guided calibration for each new player.
 - **Game:** a tutorial and three levels (Awakening, The Listener, The Choir), blind Hollows that hunt by sound, the Hush, breakable pots and the Stalker.
-- **Look and sound:** sonar-lit rock caves, creature artwork, jumpscares and 3D positional audio.
+- **Look and sound:** sonar-lit rock caves, creature artwork, a filmed jumpscare when you are caught, and 3D positional audio.
 - **Quality:** typecheck + unit tests (`npm run check`) and the production build pass.
 
 Quick start: `cd echo && npm install && npm run assets && npm run dev`, then open http://127.0.0.1:5173 in Chrome with headphones on.

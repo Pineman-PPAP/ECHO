@@ -16,6 +16,7 @@ import { Renderer } from '../render/Renderer';
 import { Card } from '../ui/Card';
 import { DebugPanel } from '../ui/DebugPanel';
 import { Hud } from '../ui/Hud';
+import { JumpscareVideo } from '../ui/JumpscareVideo';
 import { CALIB_ICONS } from '../ui/icons';
 import { Overlays } from '../ui/Overlays';
 import type { Flags } from './flags';
@@ -28,7 +29,8 @@ type State =
   | { kind: 'intro' }
   | { kind: 'playing' }
   | { kind: 'paused'; faceBackSinceMs: number | null }
-  | { kind: 'caught'; hit: boolean; cut: boolean }
+  /** video: the filmed jumpscare took over on impact (false = the 3D one runs alone); cutAtMs: when it cut to black. */
+  | { kind: 'caught'; hit: boolean; cut: boolean; video: boolean; shown: boolean; cutAtMs: number }
   | { kind: 'gameover' }
   | { kind: 'escaped' }
   | { kind: 'victory' };
@@ -70,6 +72,7 @@ export class App {
   private readonly card: Card;
   private readonly hud: Hud;
   private readonly overlays: Overlays;
+  private readonly jumpVideo: JumpscareVideo;
   private readonly debug: DebugPanel;
   private readonly devBadge: HTMLElement;
   private readonly sim: SimInput | null;
@@ -105,6 +108,7 @@ export class App {
     this.renderer = new Renderer(root.querySelector<HTMLElement>('#stage')!);
     this.hud = new Hud(root);
     this.overlays = new Overlays(root);
+    this.jumpVideo = new JumpscareVideo(root);
     this.card = new Card(root);
     this.debug = new DebugPanel(root, flags.debug);
     this.devBadge = root.querySelector<HTMLElement>('#dev-badge')!;
@@ -232,20 +236,41 @@ export class App {
         break;
 
       case 'caught': {
-        // Leap, one white frame on impact, a hard cut to black and silence, then the card.
+        // Leap, one white frame on impact, a hard cut to black and silence, then the card. When the
+        // filmed jumpscare is loaded it starts under the white frame and replaces the 3D figure.
         this.card.hide();
         const since = nowMs - this.stateSinceMs;
         if (!s.hit && since >= CONFIG.JUMPSCARE_LEAP_MS) {
           s.hit = true;
           this.overlays.whiteFlash();
+          if (this.jumpVideo.ready) {
+            s.video = true;
+            this.jumpVideo.play();
+          }
         }
-        if (!s.cut && since >= CONFIG.JUMPSCARE_CUT_MS) {
+        if (s.video && !s.cut) {
+          if (this.jumpVideo.failed) {
+            s.video = false; // refused or broken: the 3D jumpscare carries on
+            this.jumpVideo.hide();
+          } else if (!s.shown && this.jumpVideo.playing) {
+            s.shown = true;
+            this.renderer.hideJumpscare();
+            this.sfx?.fadeScream(CONFIG.JUMPSCARE_SCREAM_FADE_S);
+          }
+        }
+        const cutDue = s.video
+          ? this.jumpVideo.ended || since >= CONFIG.JUMPSCARE_LEAP_MS + CONFIG.JUMPSCARE_VIDEO_MS
+          : since >= CONFIG.JUMPSCARE_CUT_MS;
+        if (!s.cut && cutDue) {
           s.cut = true;
+          s.cutAtMs = nowMs;
           this.renderer.hideJumpscare();
+          this.jumpVideo.hide();
           this.overlays.setBlackout(true);
           this.sfx?.silence(true);
         }
-        if (since >= CONFIG.JUMPSCARE_MS) this.setState({ kind: 'gameover' }); // lifts the blackout and silence
+        const overDue = s.video ? s.cut && nowMs - s.cutAtMs >= CONFIG.JUMPSCARE_VIDEO_BLACK_MS : since >= CONFIG.JUMPSCARE_MS;
+        if (overDue) this.setState({ kind: 'gameover' }); // lifts the blackout and silence
         break;
       }
 
@@ -291,6 +316,7 @@ export class App {
 
   private setState(next: State): void {
     if (this.state.kind === 'caught' && next.kind !== 'caught') {
+      this.jumpVideo.hide();
       this.overlays.setBlackout(false);
       this.sfx?.silence(false);
     }
@@ -306,6 +332,7 @@ export class App {
     void audio.resume();
     this.audio = audio;
     this.sfx = new Sfx(audio, (gateMs) => this.onGameSound(gateMs));
+    this.sfx.playThrough(this.jumpVideo.video, CONFIG.JUMPSCARE_VIDEO_GAIN);
     if (this.sim) {
       this.startLevel(this.levelIndex);
       return;
@@ -468,7 +495,7 @@ export class App {
           if (e.by === 'hush') this.sfx?.hushScream();
           else this.sfx?.scream();
           this.debug.log(nowMs, e.by === 'hush' ? 'CAUGHT by the Hush' : e.by === 'stalker' ? 'CAUGHT by the Stalker' : `CAUGHT by #${e.monsterId}`);
-          this.setState({ kind: 'caught', hit: false, cut: false });
+          this.setState({ kind: 'caught', hit: false, cut: false, video: false, shown: false, cutAtMs: 0 });
           break;
         case 'alerted':
           // It heard you: a red flash and dry clicks from where it stands.

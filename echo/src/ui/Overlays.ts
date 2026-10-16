@@ -73,7 +73,7 @@ export class Overlays {
 }
 
 /** A tiling grey-noise tile for the film grain (made once, as a data URL). */
-function grainTexture(): string {
+export function grainTexture(): string {
   const size = CONFIG.GRAIN_TILE_PX;
   const c = document.createElement('canvas');
   c.width = size;
