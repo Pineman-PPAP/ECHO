@@ -10,6 +10,7 @@ import type { Renderer } from '../render/Renderer';
 import type { ManualGauges, ManualOverlay } from '../ui/ManualOverlay';
 import type { Overlays } from '../ui/Overlays';
 import { FieldManual, type ManualFrame } from './FieldManual';
+import { manualStepIntent } from './manualIntent';
 
 function ease(from: number, to: number, dtS: number, tauS: number): number {
   return from + (to - from) * (1 - Math.exp(-dtS / tauS));
@@ -57,6 +58,8 @@ export class ManualDirector {
   update(nowMs: number, dtS: number, intent: PlayerIntent, gauges: ManualGauges, face: FaceFrame | null): boolean {
     const h = this.world.monsters[0], p = this.world.player;
     const input = document.hidden ? { ...idleIntent(), facePresent: false } : intent;
+    // Filter against the step that received this input, before transitions change the active step.
+    const sceneIntent = manualStepIntent(this.frame, input);
     const f = this.manual.update(dtS * 1000, input, {
       hollowDistanceM: this.frame?.beat === 'hear' ? Math.hypot(h.x - p.x, h.z - p.z) : null,
       hollowAlerted: h.state === 'alert',
@@ -88,10 +91,8 @@ export class ManualDirector {
         this.nextGlowS = this.clockS + CONFIG.MANUAL_GLOW_PULSE_MS / 1000;
       }
       const distance = Math.hypot(h.x - p.x, h.z - p.z);
-      this.world.monstersEnabled = f.hollowActive && distance > CONFIG.MANUAL_HOLLOW_HALT_M && (h.state === 'alert' || intent.pulses.length > 0);
-      // Hold the framing of the final encounter; the actor stops far outside catching distance.
-      const held = f.held || f.beat === 'hear';
-      const sceneIntent = held ? { ...intent, turnRate: 0, moveSpeed: 0, ...(f.held ? { pulses: [], hum: null } : {}) } : intent;
+      this.world.monstersEnabled = f.hollowActive && distance > CONFIG.MANUAL_HOLLOW_HALT_M && (h.state === 'alert' || sceneIntent.pulses.length > 0);
+      // Scripted shots and confirmations accept no gameplay input; skip is handled by the manual itself.
       this.route(this.world.update(dt, nowMs, this.clockS, sceneIntent));
       if (f.beat === 'hear' && f.step?.id === 'watch' && this.clockS >= this.nextGlimpseS) {
         // Scripted red glimpses make the real hunt's changing location readable in this safe shot.

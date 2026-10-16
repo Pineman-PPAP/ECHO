@@ -1,5 +1,6 @@
 import { CONFIG } from '../config';
 import type { PlayerIntent } from '../input/intent';
+import { manualStepIntent } from './manualIntent';
 
 /** Shot identifiers; the short intro uses jar → look → move → hear. */
 export type BeatId = 'dark' | 'look' | 'move' | 'clap' | 'jar' | 'hear' | 'freeze' | 'hush';
@@ -271,7 +272,7 @@ export class FieldManual {
         }
         break;
       case 'await':
-        this.judge(dt, intent, view);
+        this.judge(dt, manualStepIntent({ phase: this.phase, step: this.step }, intent), view);
         break;
       case 'stepOk':
         if (this.phaseMs >= CONFIG.MANUAL_STEP_OK_MS) this.startStep(this.stepIdx + 1);
