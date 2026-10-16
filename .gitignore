@@ -1,0 +1,12 @@
+# Stale brainstorm, not part of the project
+.archive/
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local tooling
+CLAUDE.md
+.claude/

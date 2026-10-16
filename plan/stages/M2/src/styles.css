@@ -1,0 +1,90 @@
+:root {
+  --bg: #000;
+  --text: #cfe9ff;
+  --muted: #5d7286;
+  --cyan: #4fd8ff;
+  --gold: #ffc94a;
+  --red: #ff2a2a;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif;
+  --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
+#app { position: fixed; inset: 0; }
+#stage { position: absolute; inset: 0; }
+.stage-canvas { display: block; width: 100%; height: 100%; }
+.dev-badge {
+  position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px);
+  padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7); color: var(--gold);
+  font: 12px/1.5 var(--mono); white-space: pre-wrap; pointer-events: none;
+}
+
+/* ---------------- debug / pipeline panel ---------------- */
+.debug-panel {
+  position: absolute; top: 12px; right: 12px; width: 268px; max-height: calc(100% - 24px); overflow-x: hidden; overflow-y: auto;
+  padding: 10px 12px; border: 1px solid rgba(79, 216, 255, 0.35); border-radius: 8px;
+  background: rgba(0, 6, 12, 0.82); color: var(--text); font: 11px/1.45 var(--mono); z-index: 20;
+}
+.debug-panel h3 { margin: 8px 0 4px; font: 600 11px/1 var(--mono); letter-spacing: 0.08em; color: var(--cyan); }
+.debug-panel h3:first-child { margin-top: 0; }
+.debug-panel canvas { display: block; width: 240px; border-radius: 4px; margin: 4px 0; background: #000; }
+.debug-panel [data-k] { white-space: pre; }
+.debug-panel pre { margin: 0; color: var(--muted); font: inherit; }
+.dbg-bar { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.dbg-bar span { width: 42px; color: var(--muted); }
+.dbg-bar .track { position: relative; flex: 1; height: 8px; background: #0b1a26; border-radius: 4px; overflow: hidden; }
+.dbg-bar .track.center::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); }
+.dbg-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--cyan); }
+.dbg-bar i.hot { background: var(--red); }
+.dbg-bar b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--red); }
+.dbg-bar b.open { background: var(--gold); }
+
+/* ---------------- card (title, calibration, menus, errors) ---------------- */
+.card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 32px)); padding: 28px 32px; text-align: center; z-index: 10;
+  border: 1px solid rgba(79, 216, 255, 0.4); border-radius: 14px;
+  background: rgba(0, 8, 16, 0.86); box-shadow: 0 0 60px rgba(79, 216, 255, 0.12);
+}
+.card[data-tone='gold'] { border-color: rgba(255, 201, 74, 0.6); box-shadow: 0 0 60px rgba(255, 201, 74, 0.15); }
+.card[data-tone='danger'] { border-color: rgba(255, 42, 42, 0.7); box-shadow: 0 0 80px rgba(255, 42, 42, 0.25); }
+.card h1 { margin: 0 0 12px; font-size: clamp(22px, 4vw, 34px); letter-spacing: 0.12em; color: var(--cyan); }
+.card[data-tone='gold'] h1 { color: var(--gold); }
+.card[data-tone='danger'] h1 { color: var(--red); }
+.card-body { margin: 0; font-size: 17px; line-height: 1.55; white-space: pre-line; }
+.card-hint { margin: 14px 0 0; min-height: 1.2em; color: var(--muted); font-size: 14px; letter-spacing: 0.04em; }
+.card-hint:empty { display: none; }
+.card-bar { height: 6px; margin: 16px auto 0; width: 70%; background: #0b1a26; border-radius: 3px; overflow: hidden; }
+.card-bar i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width 80ms linear; }
+.card-cam { display: block; margin: 0 auto 14px; width: 240px; height: 180px; border-radius: 8px; background: #000; }
+.card-cam[hidden] { display: none; }
+.card button {
+  margin-top: 20px; padding: 12px 36px; font: 600 16px var(--font); letter-spacing: 0.15em; text-transform: uppercase;
+  color: #001018; background: var(--cyan); border: 0; border-radius: 999px; cursor: pointer;
+}
+.card button:hover { filter: brightness(1.15); }
+.card button[hidden] { display: none; }
+
+/* ---------------- in-game HUD ---------------- */
+.hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.hud[hidden] { display: none; }
+.hud-level { position: absolute; left: 16px; top: 14px; display: flex; flex-direction: column; gap: 2px; }
+.hud-level b { font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
+.hud-level span { font-size: 13px; color: var(--muted); }
+.hud-chips { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; }
+.chip {
+  padding: 5px 10px; border: 1px solid rgba(79, 216, 255, 0.35); border-radius: 999px;
+  font: 600 11px/1 var(--mono); letter-spacing: 0.08em; color: var(--text); background: rgba(0, 0, 0, 0.55);
+}
+.chip.danger { border-color: var(--red); color: var(--red); }
+.chip.active { border-color: var(--cyan); color: var(--cyan); }
+.chip.mic { display: flex; align-items: center; gap: 6px; }
+.chip .meter { width: 60px; height: 6px; background: #0b1a26; border-radius: 3px; overflow: hidden; }
+.chip .meter i { display: block; height: 100%; width: 0; background: var(--cyan); }
+.hud-prompt {
+  position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  padding: 10px 18px; border-radius: 10px; background: rgba(0, 0, 0, 0.6);
+  font-size: 18px; text-align: center; color: var(--text);
+}
+.hud-prompt[hidden] { display: none; }

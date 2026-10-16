@@ -1,0 +1,907 @@
+import { CONFIG } from '../config';
+
+/** Mic-gating durations (ms) reported through onSound when a sound starts. */
+const GATE = {
+  ping: 900,
+  footstep: 150,
+  draft: 900,
+  beep: 300,
+  scream: 1500,
+  scrape: 300,
+  ui: 400,
+  heartbeat: 200,
+  sting: 900,
+  roar: 2000,
+  mimic: 900,
+  bats: 1500,
+  drip: 200,
+  step: 120,
+  alerted: 600,
+  pot: 800,
+  stalkerHit: 1200,
+};
+
+interface Voice {
+  panner: PannerNode;
+  scrapeGain: GainNode;
+  breathAmp: GainNode;
+  sources: AudioScheduledSourceNode[];
+  moving: boolean;
+  /** AudioContext time of its next running footstep. */
+  nextStepS: number;
+}
+
+/**
+ * Procedural sound: there are no audio files. Positional sounds use HRTF panners, so wear headphones.
+ * Every sound that could leak from speakers into the mic reports itself through `onSound(gateMs)`;
+ * App uses that to gate the mic when calibration found `speakerLeak`.
+ */
+export class Sfx {
+  readonly master: GainNode;
+  private readonly noise: AudioBuffer;
+  private readonly echoIn: GainNode;
+  private readonly guidePanner: PannerNode;
+  private readonly voices = new Map<number, Voice>();
+  private drone: AudioScheduledSourceNode[] = [];
+  private readonly droneGain: GainNode;
+  private earBreath: { amp: GainNode; pan: StereoPannerNode } | null = null;
+  private hushVoice: { amp: GainNode; panner: PannerNode } | null = null;
+  private nextBeatMs = 0;
+  /** The Stalker's rising dread and its footsteps (null while it is away). */
+  private stalker: { dread: GainNode; filter: BiquadFilterNode; detune: AudioParam[]; panner: PannerNode; sources: AudioScheduledSourceNode[]; nextStepS: number } | null = null;
+  /** The current scream goes through this, so the jumpscare can cut it dead. */
+  private screamBus: GainNode | null = null;
+
+  constructor(
+    private readonly ctx: AudioContext,
+    private readonly onSound: (gateMs: number) => void = () => {},
+  ) {
+    this.master = ctx.createGain();
+    this.master.gain.value = CONFIG.MASTER_VOLUME;
+    this.master.connect(ctx.destination);
+    this.noise = makeNoiseBuffer(ctx, 2);
+
+    // Persistent "cave answers" echo bus: echoIn -> delay <-> (lowpass -> feedback) -> master.
+    this.echoIn = ctx.createGain();
+    const delay = ctx.createDelay(1);
+    delay.delayTime.value = 0.13;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.42;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2200;
+    this.echoIn.connect(delay);
+    delay.connect(lp);
+    lp.connect(fb);
+    fb.connect(delay);
+    lp.connect(this.master);
+
+    this.guidePanner = this.makePanner();
+    this.guidePanner.refDistance = CONFIG.DRAFT_REF_DISTANCE_M;
+    this.guidePanner.connect(this.master);
+
+    this.droneGain = ctx.createGain();
+    this.droneGain.gain.value = CONFIG.DRONE_GAIN;
+    this.droneGain.connect(this.master);
+  }
+
+  // ---------------------------------------------------------------- listener / positions
+
+  /** Call every frame with the player's head position and yaw. */
+  setListener(x: number, y: number, z: number, yaw: number): void {
+    const l = this.ctx.listener;
+    const t = this.ctx.currentTime;
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    if (l.positionX) {
+      l.positionX.setValueAtTime(x, t);
+      l.positionY.setValueAtTime(y, t);
+      l.positionZ.setValueAtTime(z, t);
+      l.forwardX.setValueAtTime(fx, t);
+      l.forwardY.setValueAtTime(0, t);
+      l.forwardZ.setValueAtTime(fz, t);
+      l.upX.setValueAtTime(0, t);
+      l.upY.setValueAtTime(1, t);
+      l.upZ.setValueAtTime(0, t);
+    } else {
+      l.setPosition(x, y, z);
+      l.setOrientation(fx, 0, fz, 0, 1, 0);
+    }
+  }
+
+  /** Where the draft blows from (a few cells ahead on the route to the exit). */
+  setGuidePosition(x: number, y: number, z: number): void {
+    setPannerPosition(this.guidePanner, x, y, z, this.ctx.currentTime);
+  }
+
+  // ---------------------------------------------------------------- UI / calibration cues
+
+  tick(): void {
+    this.tone(1200, 0.04, 0.08, 'sine', this.ctx.currentTime);
+    this.onSound(GATE.beep);
+  }
+
+  /** Calibration speaker check: 1 kHz for 0.6 s. Deliberately does NOT gate the mic. */
+  testTone(): void {
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.frequency.value = 1000;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.01);
+    g.gain.setValueAtTime(0.5, t + 0.59);
+    g.gain.linearRampToValueAtTime(0, t + 0.6);
+    osc.connect(g).connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.62);
+  }
+
+  /** Menu confirm: a rising two-note chime. */
+  confirm(): void {
+    const t = this.ctx.currentTime;
+    this.tone(660, 0.18, 0.2, 'triangle', t);
+    this.tone(990, 0.3, 0.2, 'triangle', t + 0.12);
+    this.onSound(GATE.ui);
+  }
+
+  // ---------------------------------------------------------------- gameplay
+
+  /** The cave "answers" a clap: a short sonar chirp plus decaying echoes. */
+  ping(loudness: number): void {
+    const t = this.ctx.currentTime;
+    const l = Math.min(Math.max(loudness, 0.05), 1.5);
+    const osc = this.ctx.createOscillator();
+    osc.frequency.setValueAtTime(1500, t);
+    osc.frequency.exponentialRampToValueAtTime(900, t + 0.4);
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.005, 0.07 * l, 0.6);
+    osc.connect(g);
+    g.connect(this.master);
+    g.connect(this.echoIn);
+    osc.start(t);
+    osc.stop(t + 0.7);
+    this.onSound(GATE.ping);
+  }
+
+  footstep(loudness: number): void {
+    const t = this.ctx.currentTime;
+    const src = this.noiseSource();
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 700;
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.004, 0.05 + loudness, 0.07);
+    src.connect(lp).connect(g).connect(this.master);
+    src.start(t, Math.random() * 1.5);
+    src.stop(t + 0.1);
+    this.onSound(GATE.footstep);
+  }
+
+  /** A gust of cold air from the way out (positioned with setGuidePosition): breathy noise sweeping through a band-pass. */
+  draft(): void {
+    const t = this.ctx.currentTime;
+    const src = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(380, t);
+    bp.frequency.linearRampToValueAtTime(900, t + 0.9);
+    bp.frequency.linearRampToValueAtTime(450, t + 1.8);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(CONFIG.DRAFT_GAIN, t + 0.7);
+    g.gain.linearRampToValueAtTime(0.0001, t + 1.9);
+    src.connect(bp).connect(g).connect(this.guidePanner);
+    src.start(t, Math.random() * 0.1);
+    src.stop(t + 2);
+    this.onSound(GATE.draft);
+  }
+
+  /** Heartbeat speeds up and gets louder with danger (0..1). Call every frame while playing. */
+  updateHeartbeat(nowMs: number, danger: number): void {
+    if (danger <= 0.02 || nowMs < this.nextBeatMs) return;
+    const interval = 1100 + (380 - 1100) * danger;
+    this.nextBeatMs = nowMs + interval;
+    const t = this.ctx.currentTime;
+    const peak = 0.25 + 0.5 * danger;
+    this.tone(55, 0.12, peak, 'sine', t);
+    this.tone(50, 0.12, peak * 0.8, 'sine', t + 0.16);
+    this.onSound(GATE.heartbeat);
+  }
+
+  scream(): void {
+    const t = this.ctx.currentTime;
+    const bus = this.newScreamBus();
+    // A high, wavering shriek over the growl.
+    const shriek = this.ctx.createOscillator();
+    shriek.type = 'square';
+    shriek.frequency.setValueAtTime(1150, t);
+    shriek.frequency.exponentialRampToValueAtTime(620, t + 0.9);
+    const vib = this.ctx.createOscillator();
+    vib.frequency.value = 31;
+    const vibDepth = this.ctx.createGain();
+    vibDepth.gain.value = 70;
+    vib.connect(vibDepth).connect(shriek.frequency);
+    const sbp = this.ctx.createBiquadFilter();
+    sbp.type = 'bandpass';
+    sbp.frequency.value = 1500;
+    sbp.Q.value = 2;
+    const sg = this.ctx.createGain();
+    envelope(sg.gain, t, 0.01, 0.35, 1.0);
+    shriek.connect(sbp).connect(sg).connect(bus);
+    shriek.start(t);
+    vib.start(t);
+    shriek.stop(t + 1.1);
+    vib.stop(t + 1.1);
+    const saw = this.ctx.createOscillator();
+    saw.type = 'sawtooth';
+    saw.frequency.setValueAtTime(220, t);
+    saw.frequency.exponentialRampToValueAtTime(40, t + 1.2);
+    const shaper = this.ctx.createWaveShaper();
+    shaper.curve = distortionCurve(400);
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.01, 0.8, 1.2);
+    const n = this.noiseSource();
+    const ng = this.ctx.createGain();
+    envelope(ng.gain, t, 0.005, 0.5, 0.9);
+    saw.connect(shaper).connect(g).connect(bus);
+    n.connect(ng).connect(bus);
+    saw.start(t);
+    saw.stop(t + 1.3);
+    n.start(t);
+    n.stop(t + 1.0);
+    this.onSound(GATE.scream);
+  }
+
+  private newScreamBus(): GainNode {
+    const bus = this.ctx.createGain();
+    bus.connect(this.master);
+    setTimeout(() => bus.disconnect(), 3000);
+    this.screamBus = bus;
+    return bus;
+  }
+
+  /** The jumpscare's hard cut: the scream stops dead and everything goes quiet until silence(false). */
+  silence(on: boolean): void {
+    const t = this.ctx.currentTime;
+    if (on) {
+      this.screamBus?.gain.setTargetAtTime(0, t, 0.006);
+      this.master.gain.setTargetAtTime(0, t, 0.006);
+    } else {
+      this.master.gain.setTargetAtTime(CONFIG.MASTER_VOLUME, t, 0.25);
+    }
+  }
+
+  /** A Hollow has heard you and starts hunting: three dry clicks and a rasp from where it stands. */
+  alerted(x: number, z: number): void {
+    const t = this.ctx.currentTime;
+    const panner = this.oneShotPanner(x, z, t);
+    for (let i = 0; i < 3; i++) {
+      const src = this.noiseSource();
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2600 - i * 300;
+      bp.Q.value = 3;
+      const g = this.ctx.createGain();
+      envelope(g.gain, t + i * 0.075, 0.002, CONFIG.ALERTED_GAIN, 0.03);
+      src.connect(bp).connect(g).connect(panner);
+      src.start(t + i * 0.075, Math.random());
+      src.stop(t + i * 0.075 + 0.06);
+    }
+    const rasp = this.noiseSource();
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'bandpass';
+    lp.frequency.value = 380;
+    lp.Q.value = 1.2;
+    const rg = this.ctx.createGain();
+    envelope(rg.gain, t + 0.25, 0.08, CONFIG.ALERTED_GAIN * 0.8, 0.45);
+    rasp.connect(lp).connect(rg).connect(panner);
+    rasp.start(t + 0.25, Math.random());
+    rasp.stop(t + 0.85);
+    this.onSound(GATE.alerted);
+  }
+
+  /** Low ambient drone for atmosphere. Idempotent. */
+  startDrone(): void {
+    if (this.drone.length > 0) return;
+    const g = this.droneGain;
+    for (const f of [55, 55.6]) {
+      const o = this.ctx.createOscillator();
+      o.frequency.value = f;
+      o.connect(g);
+      o.start();
+      this.drone.push(o);
+    }
+    const n = this.noiseSource(true);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 140;
+    n.connect(lp).connect(g);
+    n.start();
+    this.drone.push(n);
+  }
+
+  stopDrone(): void {
+    for (const s of this.drone) s.stop();
+    this.drone = [];
+  }
+
+  /** 0..1 of DRONE_GAIN. Silence is the warning: World.droneLevel() drops it as danger nears. */
+  setDroneLevel(level: number): void {
+    this.droneGain.gain.setTargetAtTime(CONFIG.DRONE_GAIN * level, this.ctx.currentTime, CONFIG.DRONE_FADE_S / 3);
+  }
+
+  // ---------------------------------------------------------------- sound design: dread
+
+  /** Breathing in ONE ear (no 3D panning): side +1 = right, -1 = left; closeness 0 = silent. Call every frame. */
+  updateEarBreath(side: number, closeness: number): void {
+    if (!this.earBreath) {
+      if (closeness <= 0) return;
+      const src = this.noiseSource(true);
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 650;
+      bp.Q.value = 0.8;
+      const rhythm = this.ctx.createGain();
+      rhythm.gain.value = 0.5;
+      const lfo = this.ctx.createOscillator();
+      lfo.frequency.value = 0.32;
+      const depth = this.ctx.createGain();
+      depth.gain.value = 0.5;
+      lfo.connect(depth).connect(rhythm.gain);
+      const amp = this.ctx.createGain();
+      amp.gain.value = 0;
+      const pan = new StereoPannerNode(this.ctx, { pan: side });
+      src.connect(bp).connect(rhythm).connect(amp).connect(pan).connect(this.master);
+      src.start(0, Math.random());
+      lfo.start();
+      this.earBreath = { amp, pan };
+    }
+    const t = this.ctx.currentTime;
+    this.earBreath.pan.pan.setTargetAtTime(side, t, 0.05);
+    this.earBreath.amp.gain.setTargetAtTime(CONFIG.EAR_BREATH_GAIN * closeness, t, 0.15);
+  }
+
+  /** The Hush's whisper: a hissing formant that wobbles, in 3D at (x, z). closeness 0 = silent. Call every frame. */
+  updateHush(x: number, z: number, closeness: number): void {
+    if (!this.hushVoice) {
+      if (closeness <= 0) return;
+      const src = this.noiseSource(true);
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2600;
+      bp.Q.value = 5;
+      const formant = this.ctx.createOscillator();
+      formant.frequency.value = 0.7;
+      const formantDepth = this.ctx.createGain();
+      formantDepth.gain.value = 900;
+      formant.connect(formantDepth).connect(bp.frequency);
+      const amp = this.ctx.createGain();
+      amp.gain.value = 0;
+      const panner = this.makePanner();
+      src.connect(bp).connect(amp).connect(panner).connect(this.master);
+      src.start(0, Math.random());
+      formant.start();
+      this.hushVoice = { amp, panner };
+    }
+    const t = this.ctx.currentTime;
+    setPannerPosition(this.hushVoice.panner, x, 1.6, z, t);
+    this.hushVoice.amp.gain.setTargetAtTime(CONFIG.HUSH_WHISPER_GAIN * closeness * closeness, t, 0.25);
+  }
+
+  /** A scrape with nothing there, in 3D at (x, z). */
+  fakeScrape(x: number, z: number): void {
+    const t = this.ctx.currentTime;
+    const src = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 520;
+    bp.Q.value = 0.9;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.45, t + 0.12);
+    g.gain.setValueAtTime(0.45, t + 0.45);
+    g.gain.linearRampToValueAtTime(0.0001, t + 0.7);
+    const panner = this.oneShotPanner(x, z, t);
+    src.connect(bp).connect(g).connect(panner);
+    src.start(t, Math.random() * 1.2);
+    src.stop(t + 0.75);
+    this.onSound(GATE.scrape);
+  }
+
+  /**
+   * A clay pot shattering on rock, in 3D at (x, z): a dull thud, a bright crack, then shards ringing
+   * and skittering away over ~0.6 s. The cave echoes it, like a clap.
+   */
+  potShatter(x: number, z: number, loudness: number): void {
+    const t = this.ctx.currentTime;
+    const l = Math.min(Math.max(loudness, 0.3), 1.5) * CONFIG.POT_GAIN;
+    const panner = this.oneShotPanner(x, z, t);
+    // The body of the pot hitting the floor.
+    const thud = this.ctx.createOscillator();
+    thud.frequency.setValueAtTime(160, t);
+    thud.frequency.exponentialRampToValueAtTime(55, t + 0.12);
+    const tg = this.ctx.createGain();
+    envelope(tg.gain, t, 0.003, 0.7 * l, 0.16);
+    thud.connect(tg).connect(panner);
+    thud.start(t);
+    thud.stop(t + 0.22);
+    // The crack: a burst of bright noise.
+    const crack = this.noiseSource();
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1800;
+    const cg = this.ctx.createGain();
+    envelope(cg.gain, t, 0.001, 0.9 * l, 0.09);
+    crack.connect(hp).connect(cg).connect(panner);
+    cg.connect(this.echoIn);
+    crack.start(t, Math.random() * 1.5);
+    crack.stop(t + 0.12);
+    // Shards: short ringing clinks, denser at first, spreading out as the pieces skitter away.
+    for (let i = 0; i < 9; i++) {
+      const at = t + 0.02 + Math.pow(Math.random(), 1.6) * 0.6;
+      const o = this.ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = 1900 + Math.random() * 2600;
+      const og = this.ctx.createGain();
+      envelope(og.gain, at, 0.001, (0.12 + Math.random() * 0.12) * l * (1 - (at - t) * 0.9), 0.05 + Math.random() * 0.07);
+      o.connect(og).connect(panner);
+      o.start(at);
+      o.stop(at + 0.15);
+    }
+    this.onSound(GATE.pot);
+  }
+
+  /**
+   * A pot summoned the Stalker: an intense dissonant drone starts under everything (it swells and tightens
+   * with updateStalker's intensity) and its heavy footsteps come from a 3D voice of their own.
+   */
+  stalkerStart(): void {
+    if (this.stalker) return;
+    const t = this.ctx.currentTime;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 300;
+    filter.Q.value = 4;
+    const dread = this.ctx.createGain();
+    dread.gain.setValueAtTime(0.0001, t);
+    filter.connect(dread).connect(this.master);
+    const sources: AudioScheduledSourceNode[] = [];
+    const detune: AudioParam[] = [];
+    // A low cluster a semitone apart, beating against itself; the detune grows as it comes closer.
+    for (const [f, type] of [[55, 'sawtooth'], [58.3, 'sawtooth'], [82.4, 'square'], [116.5, 'sawtooth']] as const) {
+      const o = this.ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = f;
+      o.connect(filter);
+      o.start(t);
+      sources.push(o);
+      detune.push(o.detune);
+    }
+    // A thin high whine on top, like a held breath.
+    const whine = this.ctx.createOscillator();
+    whine.frequency.value = 1870;
+    const wg = this.ctx.createGain();
+    wg.gain.value = 0.04;
+    whine.connect(wg).connect(dread);
+    whine.start(t);
+    sources.push(whine);
+    const panner = this.makePanner();
+    panner.refDistance = 3;
+    panner.rolloffFactor = 0.9;
+    panner.connect(this.master);
+    this.stalker = { dread, filter, detune, panner, sources, nextStepS: 0 };
+  }
+
+  /**
+   * Call every frame while the Stalker is around.
+   * @param intensity 0..1 (World.stalkerCloseness): louder, brighter and more sour as it comes
+   * @param speedMps how fast it walks (0 = no footsteps)
+   * @param held its face is in yours: the drone drops to a low, quiet pulse so silence is possible
+   */
+  updateStalker(x: number, z: number, intensity: number, speedMps: number, held: boolean): void {
+    const s = this.stalker;
+    if (!s) return;
+    const t = this.ctx.currentTime;
+    setPannerPosition(s.panner, x, 1.5, z, t);
+    const i = Math.min(Math.max(intensity, 0), 1);
+    const level = held ? CONFIG.STALKER_DREAD_GAIN * 0.25 : CONFIG.STALKER_DREAD_GAIN * (0.25 + 0.75 * i * i);
+    s.dread.gain.setTargetAtTime(level, t, held ? 0.04 : 0.3);
+    s.filter.frequency.setTargetAtTime(held ? 140 : 300 + 2600 * i * i, t, 0.3);
+    s.detune.forEach((d, k) => d.setTargetAtTime((k % 2 ? 1 : -1) * 40 * i, t, 0.5));
+    if (speedMps > 0.2) {
+      if (t >= s.nextStepS) {
+        this.stalkerStep(s.panner, t, 0.5 + 0.5 * i);
+        s.nextStepS = t + CONFIG.STALKER_STRIDE_M / speedMps;
+      }
+    } else {
+      s.nextStepS = 0;
+    }
+  }
+
+  /** Its face appears: a slam, a shriek of strings and a sub boom, then nothing but the low drone. */
+  stalkerHit(): void {
+    const t = this.ctx.currentTime;
+    const l = CONFIG.STALKER_HIT_GAIN;
+    const boom = this.ctx.createOscillator();
+    boom.frequency.setValueAtTime(90, t);
+    boom.frequency.exponentialRampToValueAtTime(30, t + 0.8);
+    const bg = this.ctx.createGain();
+    envelope(bg.gain, t, 0.004, l, 0.9);
+    boom.connect(bg).connect(this.master);
+    boom.start(t);
+    boom.stop(t + 1);
+    const slam = this.noiseSource();
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1400;
+    const sg = this.ctx.createGain();
+    envelope(sg.gain, t, 0.002, l * 0.8, 0.25);
+    slam.connect(lp).connect(sg).connect(this.master);
+    sg.connect(this.echoIn);
+    slam.start(t, Math.random());
+    slam.stop(t + 0.3);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2400;
+    bp.Q.value = 1.5;
+    const cg = this.ctx.createGain();
+    envelope(cg.gain, t, 0.01, l * 0.35, 1.1);
+    bp.connect(cg).connect(this.master);
+    for (const f of [1244, 1318, 1975]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.exponentialRampToValueAtTime(f * 0.94, t + 1.1);
+      o.connect(bp);
+      o.start(t);
+      o.stop(t + 1.2);
+    }
+    this.onSound(GATE.stalkerHit);
+  }
+
+  /** It is gone (or the level ended): the drone fades and its voice is torn down. */
+  stalkerStop(): void {
+    const s = this.stalker;
+    if (!s) return;
+    this.stalker = null;
+    const t = this.ctx.currentTime;
+    s.dread.gain.setTargetAtTime(0.0001, t, 0.6);
+    for (const src of s.sources) src.stop(t + 3);
+    setTimeout(() => {
+      s.dread.disconnect();
+      s.panner.disconnect();
+    }, 3500);
+  }
+
+  /** One of the Stalker's steps: heavy and slow, a deep thud with grit crunching under it. */
+  private stalkerStep(panner: PannerNode, t: number, intensity: number): void {
+    const g = CONFIG.STALKER_STEP_GAIN * intensity;
+    const thud = this.ctx.createOscillator();
+    thud.frequency.setValueAtTime(75, t);
+    thud.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+    const tg = this.ctx.createGain();
+    envelope(tg.gain, t, 0.004, g, 0.2);
+    thud.connect(tg).connect(panner);
+    thud.start(t);
+    thud.stop(t + 0.26);
+    const grit = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 700 + Math.random() * 400;
+    bp.Q.value = 0.8;
+    const ng = this.ctx.createGain();
+    envelope(ng.gain, t + 0.01, 0.01, g * 0.45, 0.14);
+    grit.connect(bp).connect(ng).connect(panner);
+    grit.start(t, Math.random());
+    grit.stop(t + 0.2);
+    this.onSound(GATE.step);
+  }
+
+  /** The player's clap, copied: a clap transient plus a slightly flat sonar chirp, in 3D at (x, z). */
+  mimic(x: number, z: number, loudness: number): void {
+    const t = this.ctx.currentTime;
+    const l = Math.min(Math.max(loudness, 0.2), 1.2);
+    const panner = this.oneShotPanner(x, z, t);
+    const src = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1400;
+    bp.Q.value = 1.1;
+    const cg = this.ctx.createGain();
+    envelope(cg.gain, t, 0.002, 0.6 * l, 0.06);
+    src.connect(bp).connect(cg).connect(panner);
+    src.start(t, Math.random() * 1.5);
+    src.stop(t + 0.1);
+    const osc = this.ctx.createOscillator();
+    osc.frequency.setValueAtTime(1350, t);
+    osc.frequency.exponentialRampToValueAtTime(780, t + 0.45);
+    const og = this.ctx.createGain();
+    envelope(og.gain, t, 0.005, 0.1 * l, 0.6);
+    osc.connect(og).connect(panner);
+    og.connect(this.echoIn);
+    osc.start(t);
+    osc.stop(t + 0.7);
+    this.onSound(GATE.mimic);
+  }
+
+  /** A short dissonant swell: "it moved", "it's there". */
+  sting(): void {
+    const t = this.ctx.currentTime;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(400, t);
+    lp.frequency.exponentialRampToValueAtTime(2400, t + 0.15);
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.03, 0.22, 0.9);
+    lp.connect(g).connect(this.master);
+    for (const f of [92.5, 98, 138.6]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.connect(lp);
+      o.start(t);
+      o.stop(t + 1);
+    }
+    this.onSound(GATE.sting);
+  }
+
+  /** The finale: a deep roar that everything is awake. */
+  roar(): void {
+    const t = this.ctx.currentTime;
+    const saw = this.ctx.createOscillator();
+    saw.type = 'sawtooth';
+    saw.frequency.setValueAtTime(70, t);
+    saw.frequency.exponentialRampToValueAtTime(42, t + 1.8);
+    const shaper = this.ctx.createWaveShaper();
+    shaper.curve = distortionCurve(200);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 600;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.55, t + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2);
+    saw.connect(shaper).connect(lp).connect(g).connect(this.master);
+    g.connect(this.echoIn);
+    saw.start(t);
+    saw.stop(t + 2.05);
+    this.onSound(GATE.roar);
+  }
+
+  /** The Hush catching the player: an airy, rising shriek instead of the Hollows' growl. */
+  hushScream(): void {
+    const t = this.ctx.currentTime;
+    const src = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 6;
+    bp.frequency.setValueAtTime(1200, t);
+    bp.frequency.exponentialRampToValueAtTime(5200, t + 0.9);
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.02, 1.2, 1.1);
+    src.connect(bp).connect(g).connect(this.newScreamBus());
+    src.start(t);
+    src.stop(t + 1.2);
+    this.onSound(GATE.scream);
+  }
+
+  /** A water drop landing in a puddle, in 3D at (x, z): a falling "plink". */
+  drip(x: number, z: number): void {
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.frequency.setValueAtTime(1900 + Math.random() * 500, t);
+    osc.frequency.exponentialRampToValueAtTime(700, t + 0.09);
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.002, CONFIG.DRIP_GAIN, 0.14);
+    const panner = this.oneShotPanner(x, z, t);
+    osc.connect(g).connect(panner);
+    g.connect(this.echoIn);
+    osc.start(t);
+    osc.stop(t + 0.2);
+    this.onSound(GATE.drip);
+  }
+
+  /** A flock of wings: fluttering noise that flies from (x0, z0) over the listener to (x1, z1). */
+  bats(x0: number, z0: number, x1: number, z1: number, durS: number): void {
+    const t = this.ctx.currentTime;
+    const src = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2400;
+    bp.Q.value = 0.7;
+    const flutter = this.ctx.createGain();
+    flutter.gain.value = 0.5;
+    const lfo = this.ctx.createOscillator();
+    lfo.frequency.value = CONFIG.BAT_FLAP_HZ * 2;
+    const depth = this.ctx.createGain();
+    depth.gain.value = 0.5;
+    lfo.connect(depth).connect(flutter.gain);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(CONFIG.BAT_GAIN, t + 0.12);
+    g.gain.setValueAtTime(CONFIG.BAT_GAIN, t + durS * 0.6);
+    g.gain.linearRampToValueAtTime(0.0001, t + durS);
+    const panner = this.oneShotPanner(x0, z0, t);
+    panner.positionX.linearRampToValueAtTime(x1, t + durS);
+    panner.positionZ.linearRampToValueAtTime(z1, t + durS);
+    src.connect(bp).connect(flutter).connect(g).connect(panner);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + durS + 0.05);
+    lfo.start(t);
+    lfo.stop(t + durS + 0.05);
+    this.onSound(GATE.bats);
+  }
+
+  /** Silences the per-level dread voices (call on level change). */
+  resetDread(): void {
+    const t = this.ctx.currentTime;
+    this.earBreath?.amp.gain.setTargetAtTime(0, t, 0.05);
+    this.hushVoice?.amp.gain.setTargetAtTime(0, t, 0.05);
+  }
+
+  // ---------------------------------------------------------------- monster voices (3D)
+
+  /** Creates the looping scrape + breath sounds for a monster (silent until updateVoice says otherwise). */
+  addVoice(id: number): void {
+    if (this.voices.has(id)) return;
+    const panner = this.makePanner();
+    panner.connect(this.master);
+
+    const scrapeSrc = this.noiseSource(true);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 500;
+    bp.Q.value = 0.9;
+    const scrapeGain = this.ctx.createGain();
+    scrapeGain.gain.value = 0;
+    scrapeSrc.connect(bp).connect(scrapeGain).connect(panner);
+
+    const breathSrc = this.noiseSource(true);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 350;
+    const lfoGain = this.ctx.createGain();
+    lfoGain.gain.value = 0.5; // 0.5 +/- 0.5 from the LFO below
+    const lfo = this.ctx.createOscillator();
+    lfo.frequency.value = 0.28;
+    const lfoDepth = this.ctx.createGain();
+    lfoDepth.gain.value = 0.5;
+    lfo.connect(lfoDepth).connect(lfoGain.gain);
+    const breathAmp = this.ctx.createGain();
+    breathAmp.gain.value = 0;
+    breathSrc.connect(lp).connect(lfoGain).connect(breathAmp).connect(panner);
+
+    const offset = Math.random() * 1.9;
+    scrapeSrc.start(0, offset);
+    breathSrc.start(0, (offset + 0.7) % 1.9);
+    lfo.start();
+    this.voices.set(id, { panner, scrapeGain, breathAmp, sources: [scrapeSrc, breathSrc, lfo], moving: false, nextStepS: 0 });
+  }
+
+  /**
+   * Call every frame per monster.
+   * @param speedMps how fast it moves: a creep scrapes softly; running adds quick bony footsteps
+   */
+  updateVoice(id: number, x: number, z: number, moving: boolean, distanceToPlayer: number, speedMps = 0): void {
+    const v = this.voices.get(id);
+    if (!v) return;
+    const t = this.ctx.currentTime;
+    setPannerPosition(v.panner, x, 1.6, z, t);
+    const speedRatio = speedMps / CONFIG.HOLLOW_SCRAPE_FULL_SPEED;
+    v.scrapeGain.gain.setTargetAtTime(moving ? 0.55 * Math.min(Math.max(speedRatio, 0.25), 1) : 0, t, 0.03);
+    if (moving && speedMps >= CONFIG.HOLLOW_STEP_MIN_SPEED) {
+      if (t >= v.nextStepS) {
+        this.hollowStep(v.panner, t, Math.min(speedMps / CONFIG.HUNT_SPEED_FAR, 1));
+        v.nextStepS = t + (CONFIG.HOLLOW_STRIDE_M / speedMps) * (0.85 + 0.3 * Math.random());
+      }
+    } else {
+      v.nextStepS = 0;
+    }
+    const breath = distanceToPlayer < 9 ? 0.35 * (1 - distanceToPlayer / 9) : 0;
+    v.breathAmp.gain.setTargetAtTime(breath, t, 0.2);
+    if (moving && !v.moving) this.onSound(GATE.scrape);
+    v.moving = moving;
+  }
+
+  /** One running footstep: a dry knock with a soft thud, louder the faster it runs. */
+  private hollowStep(panner: PannerNode, t: number, intensity: number): void {
+    const src = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1300 + Math.random() * 500;
+    bp.Q.value = 1.6;
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.002, CONFIG.HOLLOW_STEP_GAIN * (0.5 + 0.5 * intensity), 0.05);
+    src.connect(bp).connect(g).connect(panner);
+    src.start(t, Math.random());
+    src.stop(t + 0.08);
+    const thud = this.ctx.createOscillator();
+    thud.frequency.setValueAtTime(110, t);
+    thud.frequency.exponentialRampToValueAtTime(55, t + 0.06);
+    const tg = this.ctx.createGain();
+    envelope(tg.gain, t, 0.003, CONFIG.HOLLOW_STEP_GAIN * 0.8 * intensity, 0.07);
+    thud.connect(tg).connect(panner);
+    thud.start(t);
+    thud.stop(t + 0.1);
+    this.onSound(GATE.step);
+  }
+
+  clearVoices(): void {
+    for (const v of this.voices.values()) {
+      for (const s of v.sources) s.stop();
+      v.panner.disconnect();
+    }
+    this.voices.clear();
+  }
+
+  // ---------------------------------------------------------------- helpers
+
+  private tone(freq: number, durS: number, gain: number, type: OscillatorType, t: number): void {
+    const osc = this.ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.value = freq;
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.005, gain, durS);
+    osc.connect(g).connect(this.master);
+    osc.start(t);
+    osc.stop(t + durS + 0.05);
+  }
+
+  private noiseSource(loop = false): AudioBufferSourceNode {
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = loop;
+    return src;
+  }
+
+  /** A 3D panner at (x, z) for a one-shot sound; it disconnects itself after a few seconds. */
+  private oneShotPanner(x: number, z: number, t: number): PannerNode {
+    const p = this.makePanner();
+    setPannerPosition(p, x, 1.6, z, t);
+    p.connect(this.master);
+    setTimeout(() => p.disconnect(), 4000);
+    return p;
+  }
+
+  private makePanner(): PannerNode {
+    return new PannerNode(this.ctx, {
+      panningModel: 'HRTF',
+      distanceModel: 'inverse',
+      refDistance: 2,
+      rolloffFactor: 1.3,
+      maxDistance: 60,
+    });
+  }
+}
+
+/** Exponential attack/decay. Exponential ramps cannot touch 0, hence the 0.0001 floor. */
+function envelope(param: AudioParam, t: number, attackS: number, peak: number, decayS: number): void {
+  const p = Math.max(peak, 0.0002);
+  param.setValueAtTime(0.0001, t);
+  param.exponentialRampToValueAtTime(p, t + attackS);
+  param.exponentialRampToValueAtTime(0.0001, t + attackS + decayS);
+}
+
+function setPannerPosition(p: PannerNode, x: number, y: number, z: number, t: number): void {
+  p.positionX.setValueAtTime(x, t);
+  p.positionY.setValueAtTime(y, t);
+  p.positionZ.setValueAtTime(z, t);
+}
+
+function makeNoiseBuffer(ctx: AudioContext, seconds: number): AudioBuffer {
+  const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+function distortionCurve(amount: number): Float32Array<ArrayBuffer> {
+  const n = 1024;
+  const curve = new Float32Array(new ArrayBuffer(n * 4));
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
