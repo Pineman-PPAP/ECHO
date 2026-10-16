@@ -55,7 +55,7 @@ npm run demo     # production build, opens full-screen Chrome/Chromium on http:/
 
 **URL flags:** `?debug=1` pipeline/debug panel (toggle with the backtick key) · `?level=N` start at level N (0 = tutorial) · `?skipcal=1` skip calibration · `?sim=1` keyboard input, **development only**.
 
-**New player:** reload the page (F5) and click Begin; that reruns calibration. Venue setup (power mode, mic gain, symptom → setting table): [`DEMO_DAY_TUNING.md`](DEMO_DAY_TUNING.md).
+**New player:** reload the page (F5) and click Begin; that reruns calibration. Venue setup (power mode, mic gain, symptom → setting table): [`DEMO_TUNING.md`](DEMO_TUNING.md).
 
 ---
 
