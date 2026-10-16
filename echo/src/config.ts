@@ -79,15 +79,17 @@ export const CONFIG = {
   YIN_MIN_HZ: 80,
   YIN_MAX_HZ: 1200,
   YIN_THRESHOLD: 0.15,
-  /** YIN result counts as "voiced" only below this aperiodicity (0 = perfect tone). */
-  YIN_MAX_APERIODICITY: 0.3,
+  /** YIN result counts as "voiced" only below this aperiodicity (0 = perfect tone). 0.4 lets a soft, breathy hum through. */
+  YIN_MAX_APERIODICITY: 0.4,
   /** Minimum time between pitch estimates. */
   PITCH_INTERVAL_MS: 30,
-  HUM_MIN_ABOVE_FLOOR_DB: 10,
+  /** A hum this far above the room's noise floor counts: 6 dB catches a quiet "hmm". */
+  HUM_MIN_ABOVE_FLOOR_DB: 6,
   /** Level-above-floor of a "normal hum" when calibration is skipped. Maps to hum level 1.0. */
   HUM_REF_ABOVE_DB_DEFAULT: 30,
   HUM_ATTACK_MS: 100,
-  HUM_RELEASE_MS: 180,
+  /** A soft hum wavers: it stays on through dropouts this short. */
+  HUM_RELEASE_MS: 300,
   /** A hum must hold a steady note: max-min of recent pitches (in octaves) must stay below this. */
   HUM_MAX_PITCH_SPREAD_OCT: 0.15,
   HUM_PITCH_HISTORY: 5,
