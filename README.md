@@ -53,7 +53,7 @@ npm run demo     # production build, opens full-screen Chrome/Chromium on http:/
 | `npm run check` | TypeScript check + 170 unit tests (vitest) |
 | `npm run build` | Typecheck + production build into `dist/` |
 
-**URL flags:** `?debug=1` pipeline/debug panel (toggle with the backtick key) · `?level=N` start at level N (0 = tutorial) · `?skipcal=1` skip calibration · `?sim=1` keyboard input, **development only**.
+**URL flags:** `?debug=1` pipeline/debug panel (toggle with the backtick key) · `?level=N` start at level N (0 = tutorial) · `?skipcal=1` skip calibration · `?manual=0` skip the Field Manual · `?sim=1` keyboard input, **development only**.
 
 **New player:** reload the page (F5) and click Begin; that reruns calibration. Venue setup (power mode, mic gain, symptom → setting table): [`DEMO_TUNING.md`](DEMO_TUNING.md).
 
@@ -77,6 +77,7 @@ The game logic never touches a sensor: it only receives a `PlayerIntent` (turn r
 - **Face** (`face/`): MediaPipe Tasks Vision 0.10.35, GPU delegate with CPU fallback. The face transformation matrix gives head yaw and depth; both are smoothed with One-Euro filters. Yaw drives a turn *rate* (dead zone, then a curve), so you can keep looking at the screen while turning. Lean = rest depth / current depth − 1.
 - **Mic** (`audio/`): processed in 128-sample hops. A percentile noise floor tracks the room. A sharp rise starts a clap candidate, which must decay at least 8 dB for 5 ms within 75 ms and have a percussive peak before it emits an **onset**. This rejects sustained room-noise increases and abrupt hums; measured claps usually confirm in a few tens of milliseconds. The player's calibrated clap also filters out much fainter transients. Actual nearby claps can still resemble player claps to a single microphone. A **hum** is a voiced YIN pitch that stays steady (small pitch spread) above the floor.
 - **Calibration** (`calibration.ts`, ~45 s, hands-free): face check, quiet room (noise floor), neutral pose, look left (measures the yaw sign), a normal clap and a normal hum (loudness references), and a speaker-leak test. Each step first says what to do and why it matters in the cave, with a countdown (nothing is measured yet), then measures with a live reading ("Turned 14°", "Claps heard: 1 of 2", "Hearing your hum: 131 Hz"), then shows what it measured. The last screen lists every control. It is paced so a first-time player, and anyone watching, can follow it.
+- **Field Manual** (`app/FieldManual.ts`, `app/ManualDirector.ts`, `ui/ManualOverlay.ts`, about 2 minutes, once per session before the first level): a cinematic, hands-free lesson in every control, played live in a small practice cave with the game's own renderer, shaders, jar, Hollow and Stalker artwork and sounds. Each lesson has a short cinematic (letterbox, chapter title, a scripted camera move from `render/CinematicCamera.ts`), then the cave freezes into slow motion while the instruction appears, with a picture-in-picture of the player's own webcam, the real-life motion drawn over it and live meters of what the game perceives (head turn, lean, sound, hum, with the dead zones marked). Doing it brings time back to full speed and shows the real effect: turning, walking, a clap's sonar wave, the jar brought forward in the hand and waking with a hum, a Hollow in the tunnel that really hears the clap and comes (stopped well short of the player), the Stalker's stare (a stillness meter), the Hush's frost driven back by sound. Success is judged only from `PlayerIntent`, the same stream the game uses. Hints appear after 8 s, a lesson is passed for the player after 20 s, everything waits while the face is away, and humming for 3 s skips to a recap card whose control icons light up as the player uses them. If the four basic lessons were done, the tutorial level only points the way out; otherwise it teaches as before.
 - **Mapping** (`mapping.ts`): clap loudness → pulse radius 5–24 m; hum level → the firefly jar's glow (`game/FireflyJar.ts`: eases up in ~0.35 s, fades naturally after humming stops; reach 3.5–9 m all around); hum pitch (log scale, 110–300 Hz) → how excited the fireflies are (visual only).
 
 ### Game rules (`echo/src/game/`, pure TypeScript, unit-tested)
@@ -106,7 +107,7 @@ All sound is synthesized (no audio files) with Web Audio; creatures, the draft, 
 ### Layout
 
 ```
-echo/src/app/      App: frame loop + state machine (title, calibration, intro, play, pause, menus), URL flags
+echo/src/app/      App: frame loop + state machine (title, calibration, Field Manual, intro, play, pause, menus), URL flags
 echo/src/input/    sensors, signal processing, calibration, intent mapping, dev keyboard input
 echo/src/game/     pure game logic: world, player, monsters, Hush, hearing, levels, moments, cave life
 echo/src/render/   three.js: cave mesh, reveal shader, eyes, afterimages, arrows, bats/dust/drips/remains

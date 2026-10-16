@@ -1,4 +1,4 @@
-import type { LevelDef } from './grid';
+import type { Cell, Facing, LevelDef } from './grid';
 
 /**
  * Levels in play order. Tests in tests/world.test.ts and tests/moments.test.ts verify every level
@@ -132,3 +132,31 @@ export const LEVELS: LevelDef[] = [
     ],
   },
 ];
+
+/**
+ * The Field Manual's practice cave (deliberately NOT in LEVELS): a small chamber to look around in, a
+ * straight tunnel east for the clap lesson and the Hollow, and two sealed pockets far away. The exit is
+ * one of them, so the manual can never be "escaped" and no wall arrows are painted; the Hollow's spawn
+ * ('M') is the other, more than PULSE_MAX_RADIUS from anywhere the player can stand, so it is neither
+ * seen nor heard until its lesson moves it into the tunnel. Tests in fieldManual.test.ts check all of it.
+ */
+export const FIELD_MANUAL_LEVEL: LevelDef = {
+  id: 'manual',
+  name: 'Field Manual',
+  tutorial: true,
+  startFacing: 'E',
+  intro: [],
+  map: [
+    '########################',
+    '#...####################',
+    '#.S.......##########M#E#',
+    '########################',
+  ],
+};
+
+/** Where the Field Manual stages things: the start mark (and its facing), and where the Hollow waits for its lesson, 12 m down the tunnel. */
+export const FIELD_MANUAL_STAGE: { start: Cell; facing: Facing; hollow: Cell } = {
+  start: { c: 2, r: 2 },
+  facing: 'E',
+  hollow: { c: 6, r: 2 },
+};

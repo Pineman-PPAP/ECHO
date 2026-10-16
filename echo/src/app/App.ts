@@ -17,14 +17,18 @@ import { Card } from '../ui/Card';
 import { DebugPanel } from '../ui/DebugPanel';
 import { Hud } from '../ui/Hud';
 import { CALIB_ICONS } from '../ui/icons';
+import { ManualOverlay, type ManualGauges } from '../ui/ManualOverlay';
 import { Overlays } from '../ui/Overlays';
 import type { Flags } from './flags';
+import { ManualDirector } from './ManualDirector';
 
 type State =
   | { kind: 'title' }
   | { kind: 'loading'; message: string }
   | { kind: 'error'; title: string; body: string }
   | { kind: 'calibrating'; runner: CalibrationRunner }
+  /** The Field Manual: a cinematic, hands-free lesson in every control (ManualDirector), before the first level. */
+  | { kind: 'manual'; director: ManualDirector }
   | { kind: 'intro' }
   | { kind: 'playing' }
   | { kind: 'paused'; faceBackSinceMs: number | null }
@@ -57,7 +61,7 @@ interface Stats {
 /**
  * The application: owns every subsystem and runs the state machine + frame loop.
  *
- *  title --click--> loading --> calibrating --> intro --clap/timeout--> playing <--> paused (face lost)
+ *  title --click--> loading --> calibrating --> manual (first time only) --> intro --clap/timeout--> playing <--> paused (face lost)
  *                                  ^                                     |  |
  *                                  |  hum (new player)                   |  +--exit--> escaped --clap--> intro (next level)
  *                                  +------------- gameover <-- caught <--+                 \--last level--> victory --clap--> intro
@@ -70,6 +74,7 @@ export class App {
   private readonly card: Card;
   private readonly hud: Hud;
   private readonly overlays: Overlays;
+  private readonly manualUi: ManualOverlay;
   private readonly debug: DebugPanel;
   private readonly devBadge: HTMLElement;
   private readonly sim: SimInput | null;
@@ -96,6 +101,9 @@ export class App {
   private lastDripS = 0;
   private nextAttractMs = 0;
   private lowFpsSinceMs: number | null = null;
+  /** The Field Manual runs once per session; if the player did its four basic lessons, the tutorial skips its own teaching. */
+  private manualDone = false;
+  private manualLearned = false;
 
   constructor(
     root: HTMLElement,
@@ -105,6 +113,7 @@ export class App {
     this.renderer = new Renderer(root.querySelector<HTMLElement>('#stage')!);
     this.hud = new Hud(root);
     this.overlays = new Overlays(root);
+    this.manualUi = new ManualOverlay(root, flags.sim);
     this.card = new Card(root);
     this.debug = new DebugPanel(root, flags.debug);
     this.devBadge = root.querySelector<HTMLElement>('#dev-badge')!;
@@ -139,7 +148,9 @@ export class App {
         : idleIntent();
 
     this.step(nowMs, dtS, clockS, intent, frames);
-    this.renderer.render(this.world, clockS, nowMs);
+    // The Field Manual has its own practice cave and its own (slow-motion) clock.
+    if (this.state.kind === 'manual') this.renderer.render(this.state.director.world, this.state.director.clockS, nowMs);
+    else this.renderer.render(this.world, clockS, nowMs);
     this.updateAudio(nowMs, clockS);
     this.updateOverlays(nowMs, intent, frames);
   };
@@ -190,10 +201,21 @@ export class App {
         this.card.drawCamera(this.sensors?.lastFace ?? null);
         if (u.finished) {
           this.applyCalibration(s.runner.data);
-          this.startLevel(this.levelIndex);
+          this.afterSetup();
         }
         break;
       }
+
+      case 'manual':
+        this.card.hide();
+        if (s.director.update(nowMs, dtS, intent, this.manualGauges(intent, frames), this.sensors?.lastFace ?? null)) {
+          this.manualDone = true;
+          this.manualLearned = s.director.learnedBasics;
+          s.director.exit();
+          this.debug.log(nowMs, `field manual done · basics ${this.manualLearned ? 'learned' : 'not all done'}`);
+          this.startLevel(this.levelIndex);
+        }
+        break;
 
       case 'intro': {
         const def = this.world.level.def;
@@ -307,7 +329,7 @@ export class App {
     this.audio = audio;
     this.sfx = new Sfx(audio, (gateMs) => this.onGameSound(gateMs));
     if (this.sim) {
-      this.startLevel(this.levelIndex);
+      this.afterSetup();
       return;
     }
     this.setState({ kind: 'loading', message: 'Starting…' });
@@ -318,10 +340,11 @@ export class App {
         this.sensors = sensors;
         this.watchDevices(sensors.stream);
         this.card.setVideo(sensors.video);
+        this.manualUi.setVideo(sensors.video);
         this.debug.setVideo(sensors.video);
         if (this.flags.skipCal) {
           this.applyCalibration(defaultCalibration());
-          this.startLevel(this.levelIndex);
+          this.afterSetup();
         } else {
           this.startCalibration();
         }
@@ -392,6 +415,20 @@ export class App {
     this.setState({ kind: 'calibrating', runner: new CalibrationRunner(performance.now()) });
   }
 
+  /**
+   * After calibration (or Begin in sim): the Field Manual first, once per session, when starting from the
+   * first level; otherwise straight to the level.
+   */
+  private afterSetup(): void {
+    if (this.flags.manual && !this.manualDone && this.levelIndex === 0) {
+      const clockS = (performance.now() - this.appStartMs) / 1000;
+      this.setState({ kind: 'manual', director: new ManualDirector(this.renderer, this.overlays, this.manualUi, this.sfx, this.sim !== null, clockS) });
+      this.debug.log(performance.now(), 'field manual');
+    } else {
+      this.startLevel(this.levelIndex);
+    }
+  }
+
   private applyCalibration(data: CalibrationData): void {
     this.calib = data;
     this.intents.setCalibration(data);
@@ -402,7 +439,8 @@ export class App {
     this.levelIndex = Math.max(0, Math.min(index, LEVELS.length - 1));
     this.world = new World(LEVELS[this.levelIndex], this.levelIndex + 1);
     this.renderer.loadLevel(this.world.level);
-    this.tutorial = this.world.level.def.tutorial ? new Tutorial(this.world, this.sim !== null) : null;
+    // After a completed Field Manual the tutorial level only points the way; otherwise it teaches as before.
+    this.tutorial = this.world.level.def.tutorial ? new Tutorial(this.world, this.sim !== null, this.manualLearned ? 'exit' : 'clap') : null;
     this.momentPrompt = null;
     this.hushPrompted = false;
     this.drips = dripSpots(this.world.level, levelSeed(this.world.level));
@@ -535,6 +573,10 @@ export class App {
   }
 
   private updateAudio(nowMs: number, clockS: number): void {
+    if (this.state.kind === 'manual') {
+      this.state.director.updateAudio(nowMs);
+      return;
+    }
     const sfx = this.sfx;
     const prevDripS = this.lastDripS;
     this.lastDripS = clockS;
@@ -607,6 +649,31 @@ export class App {
     if (kind === 'title') p.yaw += CONFIG.TITLE_SPIN_RATE * dtS;
   }
 
+  /** What the Field Manual's live meters show: the calibrated head turn, lean and mic level (or the sim keys). */
+  private manualGauges(intent: PlayerIntent, frames: SensorFrames | null): ManualGauges {
+    const humLevel = intent.hum?.level ?? 0;
+    if (this.sim || !frames) {
+      const maxTurn = (CONFIG.MAX_TURN_RATE_DEG * Math.PI) / 180;
+      return {
+        turn: intent.turnRate / maxTurn,
+        lean: intent.moveSpeed >= 0 ? intent.moveSpeed / CONFIG.MAX_SPEED_FWD : intent.moveSpeed / CONFIG.MAX_SPEED_BACK,
+        sound: 0,
+        soundThreshold: null,
+        humHz: intent.hum ? (this.sim?.pitchHz ?? null) : null,
+        humLevel,
+      };
+    }
+    const lean = this.intents.lean;
+    return {
+      turn: this.intents.relYawLeftDeg / CONFIG.YAW_FULL_DEG,
+      lean: lean >= 0 ? lean / CONFIG.LEAN_FWD_FULL : lean / CONFIG.LEAN_BACK_FULL,
+      sound: Math.max(frames.mic.aboveDb, 0) / this.calib.clapRefAboveDb,
+      soundThreshold: CONFIG.ONSET_MIN_ABOVE_FLOOR_DB / this.calib.clapRefAboveDb,
+      humHz: intent.hum ? frames.mic.humPitchHz : null,
+      humLevel,
+    };
+  }
+
   private confirmHint(action: string): string {
     return this.sim ? `Space (clap) to ${action}` : `Clap to ${action}`;
   }
@@ -625,10 +692,11 @@ export class App {
       humHz: intent.hum ? (this.sim ? this.sim.pitchHz : (frames?.mic.humPitchHz ?? null)) : null,
       sim: this.sim !== null,
     });
+    const manual = this.state.kind === 'manual' ? this.state.director : null;
     this.overlays.update({
-      active: playing,
-      danger: playing ? this.world.danger() : 0,
-      hush: playing ? this.world.hushCloseness() : 0,
+      active: playing || manual !== null,
+      danger: manual ? manual.danger : playing ? this.world.danger() : 0,
+      hush: manual ? manual.frost : playing ? this.world.hushCloseness() : 0,
     });
     const p = this.world.player;
     this.debug.update({
@@ -658,7 +726,7 @@ export class App {
         : undefined,
       intent,
       game: {
-        status: `${this.state.kind}/${this.world.status}`,
+        status: manual ? `manual/${manual.phase}` : `${this.state.kind}/${this.world.status}`,
         scale: this.renderer.scale,
         danger: this.world.danger(),
         hush: this.world.hush

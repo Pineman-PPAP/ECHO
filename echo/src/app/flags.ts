@@ -8,6 +8,8 @@ export interface Flags {
   level: number;
   /** Real sensors but skip calibration (use defaultCalibration()). */
   skipCal: boolean;
+  /** Show the Field Manual before the first level (default on; ?manual=0 skips it). */
+  manual: boolean;
 }
 
 export function readFlags(search: string = window.location.search): Flags {
@@ -19,5 +21,6 @@ export function readFlags(search: string = window.location.search): Flags {
     debug: on('debug'),
     level: Number.isFinite(level) && level >= 0 ? level : 0,
     skipCal: on('skipcal'),
+    manual: p.get('manual') !== '0' && p.get('manual') !== 'false',
   };
 }

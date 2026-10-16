@@ -34,10 +34,16 @@ export class Tutorial {
   private distanceAtStepStart: number;
   private humMs = 0;
 
+  /**
+   * @param startAt where to begin: 'exit' after a completed Field Manual (which already taught every
+   *   control), so the level only points the way out
+   */
   constructor(
     private readonly world: World,
     private readonly sim: boolean,
+    startAt: TutorialStep = 'clap',
   ) {
+    this.step = startAt;
     this.lastYaw = world.player.yaw;
     this.distanceAtStepStart = world.player.distanceWalked;
   }

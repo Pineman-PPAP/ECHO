@@ -146,6 +146,14 @@ export const CONFIG = {
   JAR_ART_WIDTH_M: 0.31,
   JAR_ART_DARK_EXPOSURE: 0.055,
   JAR_ART_LIT_EXPOSURE: 0.85,
+  /**
+   * The Field Manual's close-up: the hand brings the jar forward to here (camera space, metres) and turns
+   * it this much toward the camera. Its light on the rock comes from the jar, so it moves with it.
+   */
+  JAR_OFFER_X_M: -0.055,
+  JAR_OFFER_Y_M: -0.05,
+  JAR_OFFER_Z_M: -0.37,
+  JAR_OFFER_TURN_RAD: 0.22,
   /** Fireflies in the jar (render only). */
   FIREFLY_COUNT: 36,
   /** Keep the original 14-insect flicker sample so additional flies cannot change cave lighting. */
@@ -531,6 +539,121 @@ export const CONFIG = {
   TUTORIAL_WALK_M: 4,
   /** Tutorial: hum time (ms) to pass the hum step. */
   TUTORIAL_HUM_MS: 1500,
+
+  // ---------------- Field Manual (cinematic onboarding before the first level) ----------------
+  /** The opening ("You can't see") lasts this long; it fades in from black over MANUAL_OPEN_FADE_MS. */
+  MANUAL_OPEN_MS: 7000,
+  MANUAL_OPEN_FADE_MS: 2200,
+  /** Each lesson's cinematic setup (title, camera move) before it waits for the player. */
+  MANUAL_SETUP_MS: 2800,
+  /** A cut to another place: fade to black and back. */
+  MANUAL_CUT_MS: 1100,
+  /** The short tick between two steps of one lesson. */
+  MANUAL_STEP_OK_MS: 1000,
+  /** The lesson's consequence line before the next lesson starts. */
+  MANUAL_CONFIRM_MS: 3600,
+  /** A step shows its hint after MANUAL_HINT_MS and is passed for the player after MANUAL_TIMEOUT_MS (never a soft-lock). */
+  MANUAL_HINT_MS: 8000,
+  MANUAL_TIMEOUT_MS: 20000,
+  /** While the cave waits for the player it runs at this speed ("bullet time"). Acting snaps it back to 1. */
+  MANUAL_SLOWMO: 0.12,
+  /** Time stays at full speed this long after the player's last action, then slows down with MANUAL_TIME_EASE_S. */
+  MANUAL_ACTION_HOLD_MS: 900,
+  MANUAL_TIME_EASE_S: 0.35,
+  /** The cinematic camera eases in and out of its shot with this time constant (s). */
+  MANUAL_SHOT_EASE_S: 0.45,
+  /** Setups that aim down the tunnel turn the player with this time constant (s). */
+  MANUAL_AIM_EASE_S: 0.35,
+  /** The jar's close-up eases in and out with this time constant (s). */
+  MANUAL_JAR_EASE_S: 0.45,
+  /** Faint "breathing" light while learning to look and walk: pulses nothing can hear. */
+  MANUAL_GLOW_PULSE_MS: 1800,
+  MANUAL_GLOW_LOUDNESS: 0.5,
+  /** Look: head-turn travel needed each way (rad of view). */
+  MANUAL_LOOK_RAD: 0.8,
+  /** Walk: metres to lean forward for, then how long to stay stopped. */
+  MANUAL_WALK_M: 2,
+  MANUAL_STOP_MS: 800,
+  /** Clap: sharp sounds needed in the soft-then-loud step. */
+  MANUAL_CLAP_EXTRA: 2,
+  /** A clap at or above this loudness is called LOUD on the sound meter, below MANUAL_SOFT_MAX it is soft. */
+  MANUAL_LOUD_MIN: 0.85,
+  MANUAL_SOFT_MAX: 0.5,
+  /** Jar: hum time that wakes the fireflies, then quiet time that lets them sleep. */
+  MANUAL_HUM_MS: 1500,
+  MANUAL_QUIET_MS: 1400,
+  /** Hear: the Hollow is stopped this far from the player (it can never reach them here), or after MANUAL_HOLLOW_RUN_MS. */
+  MANUAL_HOLLOW_HALT_M: 4.5,
+  MANUAL_HOLLOW_RUN_MS: 7000,
+  /** A clap the Hollow hasn't reacted to this long after it was made counts as "too quiet" (its hint shows at once). */
+  MANUAL_HEARD_WAIT_MS: 300,
+  /** Freeze: the Stalker's approach (the setup) starts this far behind the player. */
+  MANUAL_STALKER_APPROACH_MS: 4200,
+  MANUAL_STALKER_FROM_M: 12,
+  /** Freeze: stillness needed during the stare; nothing is judged for MANUAL_FREEZE_GRACE_MS after it starts or after a flinch. */
+  MANUAL_FREEZE_MS: 3000,
+  MANUAL_FREEZE_GRACE_MS: 450,
+  /** Hush: frost at its worst, how long a hum must last to count, and the pale shape's flicker (period, distance ahead). */
+  MANUAL_FROST: 0.8,
+  MANUAL_SOUND_HUM_MS: 300,
+  MANUAL_HUSH_FLICKER_MS: 1400,
+  MANUAL_HUSH_SHAPE_M: 3.2,
+  /** The Hush's whisper sits this far behind the player during its lesson. */
+  MANUAL_HUSH_WHISPER_M: 2.5,
+  /** Skip the manual hands-free: a hum held this long (not during the jar lesson, which asks for a hum). */
+  MANUAL_SKIP_HUM_MS: 3000,
+  /** End card: claps count after MANUAL_END_MIN_MS; it starts the game by itself after MANUAL_END_AUTO_MS. */
+  MANUAL_END_MIN_MS: 1500,
+  MANUAL_END_AUTO_MS: 16000,
+  /** Live icons on the end card stay lit this long after the player does that action. */
+  MANUAL_ICON_LIT_MS: 700,
+  /** Setup narration appears one line every MANUAL_LINE_MS; the sound meter names the last clap (soft / LOUD) for MANUAL_SOUND_TAG_MS. */
+  MANUAL_LINE_MS: 900,
+  MANUAL_SOUND_TAG_MS: 1600,
+  /**
+   * Camera moves, one per lesson (and the end card). Keyframes: t = seconds since the lesson started;
+   * forward / up / right in metres (camera frame), pitch / yaw / roll in radians, fov in degrees.
+   * Missing values are 0 (fov: CAMERA_FOV_DEG). After the last keyframe the shot holds.
+   */
+  MANUAL_SHOTS: {
+    dark: [
+      { t: 0, forward: -0.7, up: 0.25, pitch: -0.1, fov: 60 },
+      { t: 7, fov: 72 },
+    ],
+    look: [
+      { t: 0, yaw: 0.3, fov: 68 },
+      { t: 2.8, fov: 75 },
+    ],
+    move: [
+      { t: 0, forward: -0.6, up: 0.12, fov: 66 },
+      { t: 2.8, fov: 75 },
+    ],
+    clap: [
+      { t: 0, fov: 75 },
+      { t: 2.8, forward: 0.45, fov: 60 },
+    ],
+    jar: [
+      { t: 0, fov: 75 },
+      { t: 2.8, pitch: -0.14, fov: 62 },
+    ],
+    hear: [
+      { t: 0, fov: 72 },
+      { t: 2.8, up: 0.05, fov: 46 },
+    ],
+    freeze: [
+      { t: 0, fov: 75 },
+      { t: 2.1, roll: 0.025, fov: 70 },
+      { t: 4.2, roll: -0.02, pitch: 0.03, fov: 66 },
+    ],
+    hush: [
+      { t: 0, fov: 68 },
+      { t: 2.8, forward: -0.3, fov: 84 },
+    ],
+    end: [
+      { t: 0, fov: 75 },
+      { t: 3, up: 0.12, pitch: -0.08, fov: 68 },
+    ],
+  },
 
   // ---------------- Audio output ----------------
   MASTER_VOLUME: 0.8,

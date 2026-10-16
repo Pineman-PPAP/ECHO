@@ -458,19 +458,22 @@ export class FireflyJarView {
    * @param glow 0..1 how awake the fireflies are   @param excitement 0..1 (hum pitch)
    * @param turnRate rad/s the view is turning (+ = left): the jar lags behind
    * @param presence 0 = lowered out of view, 1 = held up in view
+   * @param offer 0 = held in the left hand, 1 = brought forward for the Field Manual's close-up
    */
-  update(dtS: number, clockS: number, glow: number, excitement: number, bobPhase: number, turnRate: number, presence: number): void {
+  update(dtS: number, clockS: number, glow: number, excitement: number, bobPhase: number, turnRate: number, presence: number, offer = 0): void {
     const dt = Math.min(Math.max(dtS, 0), CONFIG.MAX_DT_S);
     this.turnLag += (turnRate * CONFIG.JAR_TURN_LAG - this.turnLag) * (1 - Math.exp(-dt * 6));
+    const o = Math.min(Math.max(offer, 0), 1);
+    const k = o * o * (3 - 2 * o);
     this.heldAt.set(
-      CONFIG.JAR_HOLD_X_M + Math.sin(bobPhase * 0.5) * CONFIG.JAR_SWAY_M + this.turnLag,
-      CONFIG.JAR_HOLD_Y_M + Math.sin(bobPhase) * CONFIG.JAR_SWAY_M * 0.6,
-      CONFIG.JAR_HOLD_Z_M,
+      CONFIG.JAR_HOLD_X_M + (CONFIG.JAR_OFFER_X_M - CONFIG.JAR_HOLD_X_M) * k + Math.sin(bobPhase * 0.5) * CONFIG.JAR_SWAY_M + this.turnLag,
+      CONFIG.JAR_HOLD_Y_M + (CONFIG.JAR_OFFER_Y_M - CONFIG.JAR_HOLD_Y_M) * k + Math.sin(bobPhase) * CONFIG.JAR_SWAY_M * 0.6,
+      CONFIG.JAR_HOLD_Z_M + (CONFIG.JAR_OFFER_Z_M - CONFIG.JAR_HOLD_Z_M) * k,
     );
     const lower = 1 - presence;
     this.hold.position.copy(this.heldAt);
     this.hold.position.y -= LOWERED_M * lower * lower;
-    this.hold.rotation.set(0.12 + 0.5 * lower, 0.3, 0.1 - this.turnLag * 2 + 0.3 * lower);
+    this.hold.rotation.set(0.12 + 0.5 * lower, 0.3 - CONFIG.JAR_OFFER_TURN_RAD * k, 0.1 - this.turnLag * 2 + 0.3 * lower);
 
     const speed = (CONFIG.FIREFLY_SLEEP_SPEED + (CONFIG.FIREFLY_AWAKE_SPEED - CONFIG.FIREFLY_SLEEP_SPEED) * glow) * (1 + CONFIG.FIREFLY_EXCITED_BOOST * excitement);
     const flashHz = (CONFIG.FIREFLY_SLEEP_BLINK_HZ + (CONFIG.FIREFLY_AWAKE_BLINK_HZ - CONFIG.FIREFLY_SLEEP_BLINK_HZ) * glow) * (1 + excitement);
