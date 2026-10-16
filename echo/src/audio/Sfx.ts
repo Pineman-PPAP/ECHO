@@ -67,6 +67,13 @@ export class Sfx {
     /** The STAND STILL swell, cut dead when the face appears. */
     swell: AudioScheduledSourceNode[] | null;
   } | null = null;
+  /**
+   * Every jumpscare layer (thud, screech, sting, the clip's audio) goes into jumpIn, is pushed hard
+   * into a fast limiter and leaves through jumpOut straight to the speakers, past MASTER_VOLUME, so the
+   * catch is the loudest moment in the game without crackling. silence() cuts jumpOut too.
+   */
+  private readonly jumpIn: GainNode;
+  private readonly jumpOut: GainNode;
   /** The recorded jumpscare screech (public/jumpscare-scream.ogg), once loaded. */
   private screamBuf: AudioBuffer | null = null;
   /** The current scream goes through this, so the jumpscare can cut it dead. */
@@ -99,6 +106,18 @@ export class Sfx {
     this.guidePanner = this.makePanner();
     this.guidePanner.refDistance = CONFIG.DRAFT_REF_DISTANCE_M;
     this.guidePanner.connect(this.master);
+
+    this.jumpIn = ctx.createGain();
+    this.jumpIn.gain.value = CONFIG.JUMPSCARE_DRIVE;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = CONFIG.JUMPSCARE_LIMIT_DB;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.12;
+    this.jumpOut = ctx.createGain();
+    this.jumpOut.gain.value = CONFIG.JUMPSCARE_MAKEUP;
+    this.jumpIn.connect(limiter).connect(this.jumpOut).connect(ctx.destination);
 
     this.droneGain = ctx.createGain();
     this.droneGain.gain.value = CONFIG.DRONE_GAIN;
@@ -281,11 +300,11 @@ export class Sfx {
     return bus;
   }
 
-  /** Plays a media element's sound through the master bus, so silence() cuts it with everything else. Once per element. */
+  /** Plays the jumpscare clip's sound through the jumpscare bus, so silence() cuts it with everything else. Once per element. */
   playThrough(el: HTMLMediaElement, gain: number): void {
     const g = this.ctx.createGain();
     g.gain.value = gain;
-    this.ctx.createMediaElementSource(el).connect(g).connect(this.master);
+    this.ctx.createMediaElementSource(el).connect(g).connect(this.jumpIn);
   }
 
   /** Fetches and decodes the recorded jumpscare screech so it can start the instant you're caught. */
@@ -301,7 +320,7 @@ export class Sfx {
     src.buffer = this.screamBuf;
     const g = this.ctx.createGain();
     g.gain.value = CONFIG.JUMPSCARE_SCREAM_GAIN;
-    src.connect(g).connect(this.master);
+    src.connect(g).connect(this.jumpIn);
     src.start();
     src.onended = () => g.disconnect();
   }
@@ -315,7 +334,7 @@ export class Sfx {
     const t = this.ctx.currentTime;
     const l = CONFIG.JUMPSCARE_STING_GAIN;
     const bus = this.ctx.createGain();
-    bus.connect(this.master);
+    bus.connect(this.jumpIn);
     setTimeout(() => bus.disconnect(), 8000);
     this.stingStab(bus, t, l);
     this.stingShriek(bus, t, l, 1.3);
@@ -408,7 +427,9 @@ export class Sfx {
   thud(): void {
     const t = this.ctx.currentTime;
     const l = CONFIG.JUMPSCARE_THUD_GAIN;
-    const bus = this.newScreamBus();
+    const bus = this.ctx.createGain();
+    bus.connect(this.jumpIn);
+    setTimeout(() => bus.disconnect(), 2000);
     const sub = this.ctx.createOscillator();
     sub.frequency.setValueAtTime(110, t);
     sub.frequency.exponentialRampToValueAtTime(32, t + 0.5);
@@ -445,8 +466,10 @@ export class Sfx {
     if (on) {
       this.screamBus?.gain.setTargetAtTime(0, t, 0.006);
       this.master.gain.setTargetAtTime(0, t, 0.006);
+      this.jumpOut.gain.setTargetAtTime(0, t, 0.006);
     } else {
       this.master.gain.setTargetAtTime(CONFIG.MASTER_VOLUME, t, 0.25);
+      this.jumpOut.gain.setTargetAtTime(CONFIG.JUMPSCARE_MAKEUP, t, 0.25);
     }
   }
 

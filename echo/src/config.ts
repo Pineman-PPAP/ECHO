@@ -556,7 +556,15 @@ export const CONFIG = {
   /** The extra scare laid over the thud and clip (Sfx.jumpscareSting), and when the clip's face flickers back (s after the catch). */
   JUMPSCARE_STING_GAIN: 0.8,
   /** The recorded high screech (public/jumpscare-scream.ogg: pitched up an octave, already mastered very loud) that starts with the catch. */
-  JUMPSCARE_SCREAM_GAIN: 0.6,
+  JUMPSCARE_SCREAM_GAIN: 1.0,
+  /**
+   * The jumpscare bus: all its layers are driven by JUMPSCARE_DRIVE into a limiter at
+   * JUMPSCARE_LIMIT_DB, then raised by JUMPSCARE_MAKEUP straight to the speakers (not scaled by
+   * MASTER_VOLUME). Chrome's limiter adds its own make-up gain, so above ~1.0 it clips.
+   */
+  JUMPSCARE_DRIVE: 1.6,
+  JUMPSCARE_LIMIT_DB: -8,
+  JUMPSCARE_MAKEUP: 1.0,
   JUMPSCARE_FLICKER_HITS_S: [2.2, 4.1],
   /** Menus and the title screen emit a soft background pulse this often so the maze is visible behind cards. */
   ATTRACT_PULSE_MS: 2600,
