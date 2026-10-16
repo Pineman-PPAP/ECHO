@@ -507,8 +507,11 @@ export class App {
           break;
         case 'stalker':
           this.debug.log(nowMs, `stalker: ${e.what}`);
-          if (e.what === 'start') this.sfx?.stalkerStart();
-          if (e.what === 'warn') this.momentPrompt = { text: STALKER_WARN_PROMPT, untilMs: nowMs + CONFIG.STALKER_WARN_MS };
+          if (e.what === 'start') this.sfx?.stalkerStart(this.world.stalker.x, this.world.stalker.z);
+          if (e.what === 'warn') {
+            this.sfx?.stalkerSwell(CONFIG.STALKER_WARN_MS / 1000);
+            this.momentPrompt = { text: STALKER_WARN_PROMPT, untilMs: nowMs + CONFIG.STALKER_WARN_MS };
+          }
           if (e.what === 'stare') {
             this.renderer.showStare(clockS);
             this.overlays.flash();
@@ -517,6 +520,7 @@ export class App {
           }
           if (e.what === 'spared') {
             this.renderer.hideJumpscare();
+            this.sfx?.stalkerExhale();
             this.momentPrompt = { text: STALKER_SPARED_PROMPT, untilMs: nowMs + CONFIG.MOMENT_PROMPT_MS };
           }
           if (e.what === 'gone') this.sfx?.stalkerStop();

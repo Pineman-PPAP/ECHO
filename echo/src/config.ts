@@ -404,6 +404,12 @@ export const CONFIG = {
   STALKER_STEP_GAIN: 1.1,
   STALKER_DREAD_GAIN: 0.32,
   STALKER_HIT_GAIN: 0.9,
+  /** High scraping strings that rise with the drone; its breathing (full while it stares); the whisper; the groan when it wakes; the STAND STILL swell. */
+  STALKER_RISER_GAIN: 0.12,
+  STALKER_BREATH_GAIN: 0.4,
+  STALKER_WHISPER_GAIN: 0.5,
+  STALKER_GROAN_GAIN: 0.6,
+  STALKER_SWELL_GAIN: 0.5,
 
   // ---------------- Render / loop ----------------
   /** Size of the random film-grain tile (CSS overlay, animated by translation only). */

@@ -21,6 +21,9 @@ const GATE = {
   stalkerHit: 1200,
 };
 
+/** The Stalker's high scraping strings (Hz), a semitone apart. */
+const RISER_HZ = [1244, 1318.5];
+
 interface Voice {
   panner: PannerNode;
   scrapeGain: GainNode;
@@ -48,7 +51,21 @@ export class Sfx {
   private hushVoice: { amp: GainNode; panner: PannerNode } | null = null;
   private nextBeatMs = 0;
   /** The Stalker's rising dread and its footsteps (null while it is away). */
-  private stalker: { dread: GainNode; filter: BiquadFilterNode; detune: AudioParam[]; panner: PannerNode; sources: AudioScheduledSourceNode[]; nextStepS: number } | null = null;
+  private stalker: {
+    dread: GainNode;
+    filter: BiquadFilterNode;
+    detune: AudioParam[];
+    riser: GainNode;
+    riserFreqs: AudioParam[];
+    breath: GainNode;
+    panner: PannerNode;
+    sources: AudioScheduledSourceNode[];
+    nextStepS: number;
+    stepIndex: number;
+    nextWhisperS: number;
+    /** The STAND STILL swell, cut dead when the face appears. */
+    swell: AudioScheduledSourceNode[] | null;
+  } | null = null;
   /** The current scream goes through this, so the jumpscare can cut it dead. */
   private screamBus: GainNode | null = null;
 
@@ -453,10 +470,12 @@ export class Sfx {
   }
 
   /**
-   * A pot summoned the Stalker: an intense dissonant drone starts under everything (it swells and tightens
-   * with updateStalker's intensity) and its heavy footsteps come from a 3D voice of their own.
+   * A pot summoned the Stalker. Far behind you something wakes with a long, broken groan; then an
+   * intense dissonant drone starts under everything (it swells, brightens and sours with
+   * updateStalker's intensity), and its own 3D voice carries a limping gait (a heavy step, then a
+   * lighter one and a drag), wet breathing that grows as it nears, and now and then a whisper.
    */
-  stalkerStart(): void {
+  stalkerStart(x: number, z: number): void {
     if (this.stalker) return;
     const t = this.ctx.currentTime;
     const filter = this.ctx.createBiquadFilter();
@@ -478,26 +497,66 @@ export class Sfx {
       sources.push(o);
       detune.push(o.detune);
     }
-    // A thin high whine on top, like a held breath.
-    const whine = this.ctx.createOscillator();
-    whine.frequency.value = 1870;
-    const wg = this.ctx.createGain();
-    wg.gain.value = 0.04;
-    whine.connect(wg).connect(dread);
-    whine.start(t);
-    sources.push(whine);
+    // Strings scraping high above it, sliding slowly sharp: the riser.
+    const riser = this.ctx.createGain();
+    riser.gain.value = 0;
+    riser.connect(this.master);
+    const riserFreqs: AudioParam[] = [];
+    for (const f of RISER_HZ) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      const vib = this.ctx.createOscillator();
+      vib.frequency.value = 5.5 + Math.random();
+      const vd = this.ctx.createGain();
+      vd.gain.value = 9;
+      vib.connect(vd).connect(o.frequency);
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = f * 1.5;
+      bp.Q.value = 2;
+      o.connect(bp).connect(riser);
+      o.start(t);
+      vib.start(t);
+      sources.push(o, vib);
+      riserFreqs.push(o.frequency);
+    }
     const panner = this.makePanner();
     panner.refDistance = 3;
     panner.rolloffFactor = 0.9;
     panner.connect(this.master);
-    this.stalker = { dread, filter, detune, panner, sources, nextStepS: 0 };
+    setPannerPosition(panner, x, 1.5, z, t);
+    // Its breath: filtered noise drawn in and let out, slowly, wetly.
+    const breathSrc = this.noiseSource(true);
+    const breathBp = this.ctx.createBiquadFilter();
+    breathBp.type = 'bandpass';
+    breathBp.frequency.value = 650;
+    breathBp.Q.value = 1.4;
+    const breathCycle = this.ctx.createGain();
+    breathCycle.gain.value = 0.5;
+    const lfo = this.ctx.createOscillator();
+    lfo.frequency.value = 0.42;
+    const lfoDepth = this.ctx.createGain();
+    lfoDepth.gain.value = 0.5;
+    lfo.connect(lfoDepth).connect(breathCycle.gain);
+    const lfoFilter = this.ctx.createGain();
+    lfoFilter.gain.value = 260;
+    lfo.connect(lfoFilter).connect(breathBp.frequency);
+    const breath = this.ctx.createGain();
+    breath.gain.value = 0;
+    breathSrc.connect(breathBp).connect(breathCycle).connect(breath).connect(panner);
+    breathSrc.start(t, Math.random());
+    lfo.start(t);
+    sources.push(breathSrc, lfo);
+    this.stalker = { dread, filter, detune, riser, riserFreqs, breath, panner, sources, nextStepS: 0, stepIndex: 0, nextWhisperS: t + 2.5, swell: null };
+    this.stalkerGroan(panner, t + 0.5);
   }
 
   /**
    * Call every frame while the Stalker is around.
    * @param intensity 0..1 (World.stalkerCloseness): louder, brighter and more sour as it comes
    * @param speedMps how fast it walks (0 = no footsteps)
-   * @param held its face is in yours: the drone drops to a low, quiet pulse so silence is possible
+   * @param held its face is in yours: the music drops away and there is only its breath, right in front of you
    */
   updateStalker(x: number, z: number, intensity: number, speedMps: number, held: boolean): void {
     const s = this.stalker;
@@ -505,32 +564,90 @@ export class Sfx {
     const t = this.ctx.currentTime;
     setPannerPosition(s.panner, x, 1.5, z, t);
     const i = Math.min(Math.max(intensity, 0), 1);
-    const level = held ? CONFIG.STALKER_DREAD_GAIN * 0.25 : CONFIG.STALKER_DREAD_GAIN * (0.25 + 0.75 * i * i);
+    const level = held ? CONFIG.STALKER_DREAD_GAIN * 0.2 : CONFIG.STALKER_DREAD_GAIN * (0.25 + 0.75 * i * i);
     s.dread.gain.setTargetAtTime(level, t, held ? 0.04 : 0.3);
     s.filter.frequency.setTargetAtTime(held ? 140 : 300 + 2600 * i * i, t, 0.3);
     s.detune.forEach((d, k) => d.setTargetAtTime((k % 2 ? 1 : -1) * 40 * i, t, 0.5));
+    s.riser.gain.setTargetAtTime(held ? 0.0001 : CONFIG.STALKER_RISER_GAIN * i * i, t, held ? 0.02 : 0.4);
+    // The strings slide up to a semitone sharp as it closes in.
+    s.riserFreqs.forEach((f, k) => f.setTargetAtTime(RISER_HZ[k] * Math.pow(2, i / 12), t, 0.6));
+    s.breath.gain.setTargetAtTime(held ? CONFIG.STALKER_BREATH_GAIN : CONFIG.STALKER_BREATH_GAIN * 0.6 * i, t, 0.3);
     if (speedMps > 0.2) {
       if (t >= s.nextStepS) {
-        this.stalkerStep(s.panner, t, 0.5 + 0.5 * i);
-        s.nextStepS = t + CONFIG.STALKER_STRIDE_M / speedMps;
+        // A limp: a heavy step, then a lighter one dragged after it.
+        const heavy = s.stepIndex % 2 === 0;
+        this.stalkerStep(s.panner, t, (0.5 + 0.5 * i) * (heavy ? 1 : 0.6), !heavy);
+        s.stepIndex++;
+        const stride = CONFIG.STALKER_STRIDE_M / speedMps;
+        s.nextStepS = t + stride * (heavy ? 0.7 : 1.3) * (0.92 + 0.16 * Math.random());
+      }
+      if (!held && t >= s.nextWhisperS) {
+        this.stalkerWhisper(s.panner, t, 0.4 + 0.6 * i);
+        s.nextWhisperS = t + 2.2 + Math.random() * 2.8;
       }
     } else {
       s.nextStepS = 0;
     }
   }
 
-  /** Its face appears: a slam, a shriek of strings and a sub boom, then nothing but the low drone. */
+  /**
+   * STAND STILL: a reversed swell (air and a scraping chord pulled in backwards) that grows for durS
+   * and is cut dead by stalkerHit, so the face lands on its peak.
+   */
+  stalkerSwell(durS: number): void {
+    const s = this.stalker;
+    if (!s) return;
+    const t = this.ctx.currentTime;
+    const end = t + durS;
+    const src = this.noiseSource(true);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(300, t);
+    bp.frequency.exponentialRampToValueAtTime(5200, end);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(CONFIG.STALKER_SWELL_GAIN, end);
+    src.connect(bp).connect(g).connect(this.master);
+    src.start(t, Math.random());
+    src.stop(end + 0.05);
+    const nodes: AudioScheduledSourceNode[] = [src];
+    for (const f of [146.8, 155.6, 207.7]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.exponentialRampToValueAtTime(f * 1.06, end);
+      const og = this.ctx.createGain();
+      og.gain.setValueAtTime(0.0001, t);
+      og.gain.exponentialRampToValueAtTime(CONFIG.STALKER_SWELL_GAIN * 0.3, end);
+      o.connect(og).connect(this.master);
+      o.start(t);
+      o.stop(end + 0.05);
+      nodes.push(o);
+    }
+    s.swell = nodes;
+  }
+
+  /**
+   * Its face appears: the swell is cut, then a slam, a sub boom, a shrieking string stab and a
+   * throat-tearing screech, all at once. After it, nothing but its breath in your face.
+   */
   stalkerHit(): void {
     const t = this.ctx.currentTime;
+    const s = this.stalker;
+    if (s?.swell) {
+      for (const n of s.swell) n.stop(t);
+      s.swell = null;
+    }
     const l = CONFIG.STALKER_HIT_GAIN;
     const boom = this.ctx.createOscillator();
     boom.frequency.setValueAtTime(90, t);
-    boom.frequency.exponentialRampToValueAtTime(30, t + 0.8);
+    boom.frequency.exponentialRampToValueAtTime(28, t + 1);
     const bg = this.ctx.createGain();
-    envelope(bg.gain, t, 0.004, l, 0.9);
+    envelope(bg.gain, t, 0.004, l, 1.1);
     boom.connect(bg).connect(this.master);
     boom.start(t);
-    boom.stop(t + 1);
+    boom.stop(t + 1.2);
     const slam = this.noiseSource();
     const lp = this.ctx.createBiquadFilter();
     lp.type = 'lowpass';
@@ -541,23 +658,71 @@ export class Sfx {
     sg.connect(this.echoIn);
     slam.start(t, Math.random());
     slam.stop(t + 0.3);
+    // The string stab: a tight cluster, bowed hard, falling.
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass';
     bp.frequency.value = 2400;
     bp.Q.value = 1.5;
     const cg = this.ctx.createGain();
-    envelope(cg.gain, t, 0.01, l * 0.35, 1.1);
+    envelope(cg.gain, t, 0.01, l * 0.4, 1.2);
     bp.connect(cg).connect(this.master);
-    for (const f of [1244, 1318, 1975]) {
+    for (const f of [1244, 1318, 1396, 1975]) {
       const o = this.ctx.createOscillator();
       o.type = 'sawtooth';
       o.frequency.setValueAtTime(f, t);
-      o.frequency.exponentialRampToValueAtTime(f * 0.94, t + 1.1);
+      o.frequency.exponentialRampToValueAtTime(f * 0.92, t + 1.2);
       o.connect(bp);
       o.start(t);
-      o.stop(t + 1.2);
+      o.stop(t + 1.3);
     }
+    // The screech: a distorted voice-like tone with a fast, ragged vibrato and a vowel sweeping open.
+    const voice = this.ctx.createOscillator();
+    voice.type = 'sawtooth';
+    voice.frequency.setValueAtTime(420, t);
+    voice.frequency.exponentialRampToValueAtTime(780, t + 0.12);
+    voice.frequency.exponentialRampToValueAtTime(330, t + 1);
+    const vib = this.ctx.createOscillator();
+    vib.frequency.value = 23;
+    const vd = this.ctx.createGain();
+    vd.gain.value = 45;
+    vib.connect(vd).connect(voice.frequency);
+    const shaper = this.ctx.createWaveShaper();
+    shaper.curve = distortionCurve(300);
+    const vowel = this.ctx.createBiquadFilter();
+    vowel.type = 'bandpass';
+    vowel.Q.value = 3;
+    vowel.frequency.setValueAtTime(700, t);
+    vowel.frequency.exponentialRampToValueAtTime(2600, t + 0.15);
+    vowel.frequency.exponentialRampToValueAtTime(900, t + 1);
+    const vg = this.ctx.createGain();
+    envelope(vg.gain, t, 0.01, l * 0.55, 0.9);
+    voice.connect(shaper).connect(vowel).connect(vg).connect(this.newScreamBus());
+    voice.start(t);
+    vib.start(t);
+    voice.stop(t + 1.1);
+    vib.stop(t + 1.1);
     this.onSound(GATE.stalkerHit);
+  }
+
+  /** It turns away: a long, low exhale right in front of you and a last groan as it goes. */
+  stalkerExhale(): void {
+    const s = this.stalker;
+    if (!s) return;
+    const t = this.ctx.currentTime;
+    const src = this.noiseSource();
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1;
+    bp.frequency.setValueAtTime(900, t);
+    bp.frequency.exponentialRampToValueAtTime(260, t + 1.6);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(CONFIG.STALKER_BREATH_GAIN * 1.6, t + 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+    src.connect(bp).connect(g).connect(s.panner);
+    src.start(t, Math.random());
+    src.stop(t + 1.8);
+    this.stalkerGroan(s.panner, t + 0.3, 0.5);
   }
 
   /** It is gone (or the level ended): the drone fades and its voice is torn down. */
@@ -567,35 +732,109 @@ export class Sfx {
     this.stalker = null;
     const t = this.ctx.currentTime;
     s.dread.gain.setTargetAtTime(0.0001, t, 0.6);
+    s.riser.gain.setTargetAtTime(0.0001, t, 0.3);
+    s.breath.gain.setTargetAtTime(0.0001, t, 0.3);
+    for (const n of s.swell ?? []) n.stop(t);
     for (const src of s.sources) src.stop(t + 3);
     setTimeout(() => {
       s.dread.disconnect();
+      s.riser.disconnect();
       s.panner.disconnect();
     }, 3500);
   }
 
-  /** One of the Stalker's steps: heavy and slow, a deep thud with grit crunching under it. */
-  private stalkerStep(panner: PannerNode, t: number, intensity: number): void {
+  /** One of its steps: a deep thud with grit crunching under it; a dragged step scrapes on after. */
+  private stalkerStep(panner: PannerNode, t: number, intensity: number, drag: boolean): void {
     const g = CONFIG.STALKER_STEP_GAIN * intensity;
     const thud = this.ctx.createOscillator();
     thud.frequency.setValueAtTime(75, t);
-    thud.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+    thud.frequency.exponentialRampToValueAtTime(36, t + 0.18);
     const tg = this.ctx.createGain();
-    envelope(tg.gain, t, 0.004, g, 0.2);
+    envelope(tg.gain, t, 0.004, g, 0.22);
     thud.connect(tg).connect(panner);
+    tg.connect(this.echoIn);
     thud.start(t);
-    thud.stop(t + 0.26);
+    thud.stop(t + 0.28);
     const grit = this.noiseSource();
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass';
     bp.frequency.value = 700 + Math.random() * 400;
     bp.Q.value = 0.8;
     const ng = this.ctx.createGain();
-    envelope(ng.gain, t + 0.01, 0.01, g * 0.45, 0.14);
+    envelope(ng.gain, t + 0.01, 0.01, g * 0.5, 0.14);
     grit.connect(bp).connect(ng).connect(panner);
     grit.start(t, Math.random());
     grit.stop(t + 0.2);
+    if (drag) {
+      const scrape = this.noiseSource();
+      const sb = this.ctx.createBiquadFilter();
+      sb.type = 'bandpass';
+      sb.Q.value = 1.1;
+      sb.frequency.setValueAtTime(450, t + 0.08);
+      sb.frequency.linearRampToValueAtTime(820, t + 0.55);
+      const dg = this.ctx.createGain();
+      dg.gain.setValueAtTime(0.0001, t + 0.08);
+      dg.gain.linearRampToValueAtTime(g * 0.35, t + 0.2);
+      dg.gain.linearRampToValueAtTime(0.0001, t + 0.6);
+      scrape.connect(sb).connect(dg).connect(panner);
+      scrape.start(t + 0.08, Math.random());
+      scrape.stop(t + 0.62);
+    }
     this.onSound(GATE.step);
+  }
+
+  /** A long groan from deep in a throat: a low voice cracking upward, then sliding down. */
+  private stalkerGroan(panner: PannerNode, t: number, gain = 1): void {
+    const o = this.ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(96, t);
+    o.frequency.linearRampToValueAtTime(118, t + 0.5);
+    o.frequency.exponentialRampToValueAtTime(52, t + 2.2);
+    const wobble = this.ctx.createOscillator();
+    wobble.frequency.value = 7;
+    const wd = this.ctx.createGain();
+    wd.gain.value = 6;
+    wobble.connect(wd).connect(o.frequency);
+    const shaper = this.ctx.createWaveShaper();
+    shaper.curve = distortionCurve(120);
+    const vowel = this.ctx.createBiquadFilter();
+    vowel.type = 'bandpass';
+    vowel.Q.value = 2.5;
+    vowel.frequency.setValueAtTime(520, t);
+    vowel.frequency.exponentialRampToValueAtTime(320, t + 2.2);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(CONFIG.STALKER_GROAN_GAIN * gain, t + 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+    o.connect(shaper).connect(vowel).connect(g).connect(panner);
+    g.connect(this.echoIn);
+    o.start(t);
+    wobble.start(t);
+    o.stop(t + 2.5);
+    wobble.stop(t + 2.5);
+  }
+
+  /** A breathy whisper, a few syllables of nothing, from wherever it is. */
+  private stalkerWhisper(panner: PannerNode, t: number, gain: number): void {
+    const syllables = 3 + Math.floor(Math.random() * 3);
+    let at = t;
+    for (let k = 0; k < syllables; k++) {
+      const len = 0.08 + Math.random() * 0.14;
+      const src = this.noiseSource();
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 7;
+      bp.frequency.setValueAtTime(1800 + Math.random() * 1600, at);
+      bp.frequency.linearRampToValueAtTime(1500 + Math.random() * 2200, at + len);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.linearRampToValueAtTime(CONFIG.STALKER_WHISPER_GAIN * gain, at + len * 0.3);
+      g.gain.linearRampToValueAtTime(0.0001, at + len);
+      src.connect(bp).connect(g).connect(panner);
+      src.start(at, Math.random());
+      src.stop(at + len + 0.02);
+      at += len + 0.03 + Math.random() * 0.06;
+    }
   }
 
   /** The player's clap, copied: a clap transient plus a slightly flat sonar chirp, in 3D at (x, z). */
