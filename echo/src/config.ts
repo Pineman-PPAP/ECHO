@@ -316,6 +316,15 @@ export const CONFIG = {
   EAR_BREATH_GAIN: 0.5,
   /** The drone fades out as a Hollow comes within DRONE_CUT_RADIUS_M (silent at DRONE_SILENT_RADIUS_M), as the Hush nears, and in quiet zones. */
   DRONE_GAIN: 0.035,
+  /**
+   * Background music (public/bgm.ogg) everywhere except calibration (it would skew the room
+   * measurements). It sinks to BGM_STALKER_DUCK while the Stalker holds you and BGM_CAUGHT_DUCK
+   * under the jumpscare; level changes ease over BGM_FADE_S.
+   */
+  BGM_GAIN: 0.35,
+  BGM_FADE_S: 1.5,
+  BGM_STALKER_DUCK: 0.25,
+  BGM_CAUGHT_DUCK: 0.15,
   DRONE_CUT_RADIUS_M: 9,
   DRONE_SILENT_RADIUS_M: 3,
   /** Seconds for the drone to fade to a new level. */
@@ -535,6 +544,9 @@ export const CONFIG = {
   JUMPSCARE_VIDEO_BLACK_MS: 600,
   JUMPSCARE_VIDEO_GAIN: 1.0,
   JUMPSCARE_THUD_GAIN: 1.0,
+  /** The extra scare laid over the thud and clip (Sfx.jumpscareSting), and when the clip's face flickers back (s after the catch). */
+  JUMPSCARE_STING_GAIN: 0.8,
+  JUMPSCARE_FLICKER_HITS_S: [2.2, 4.1],
   /** Menus and the title screen emit a soft background pulse this often so the maze is visible behind cards. */
   ATTRACT_PULSE_MS: 2600,
   /** Non-tutorial levels show their hint line for this long after play starts. */

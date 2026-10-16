@@ -67,6 +67,9 @@ export class Sfx {
     /** The STAND STILL swell, cut dead when the face appears. */
     swell: AudioScheduledSourceNode[] | null;
   } | null = null;
+  /** Background music (public/bgm.ogg, a seamless loop) under everything; App sets its level each frame. */
+  private readonly bgmGain: GainNode;
+  private bgmLevel = -1;
   /** The current scream goes through this, so the jumpscare can cut it dead. */
   private screamBus: GainNode | null = null;
 
@@ -97,6 +100,10 @@ export class Sfx {
     this.guidePanner = this.makePanner();
     this.guidePanner.refDistance = CONFIG.DRAFT_REF_DISTANCE_M;
     this.guidePanner.connect(this.master);
+
+    this.bgmGain = ctx.createGain();
+    this.bgmGain.gain.value = 0;
+    this.bgmGain.connect(this.master);
 
     this.droneGain = ctx.createGain();
     this.droneGain.gain.value = CONFIG.DRONE_GAIN;
@@ -286,6 +293,104 @@ export class Sfx {
     this.ctx.createMediaElementSource(el).connect(g).connect(this.master);
   }
 
+  /**
+   * Laid over the thud and the clip when you're caught: a distorted, dissonant orchestra stab, a
+   * metallic shriek tearing downward, an inhuman ring-modulated growl, and smaller stabs on the
+   * clip's two face flickers (JUMPSCARE_FLICKER_HITS_S). A high ringing is left in your ears after.
+   */
+  jumpscareSting(): void {
+    const t = this.ctx.currentTime;
+    const l = CONFIG.JUMPSCARE_STING_GAIN;
+    const bus = this.ctx.createGain();
+    bus.connect(this.master);
+    setTimeout(() => bus.disconnect(), 8000);
+    this.stingStab(bus, t, l);
+    this.stingShriek(bus, t, l, 1.3);
+    // The growl: a low saw ring-modulated by a slow sine, so it sounds like a throat, not an instrument.
+    const growl = this.ctx.createOscillator();
+    growl.type = 'sawtooth';
+    growl.frequency.setValueAtTime(70, t);
+    growl.frequency.exponentialRampToValueAtTime(42, t + 1.8);
+    const ring = this.ctx.createGain();
+    ring.gain.value = 0;
+    const mod = this.ctx.createOscillator();
+    mod.frequency.value = 37;
+    mod.connect(ring.gain);
+    const shaper = this.ctx.createWaveShaper();
+    shaper.curve = distortionCurve(250);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 900;
+    const gg = this.ctx.createGain();
+    envelope(gg.gain, t, 0.02, l * 0.7, 2);
+    growl.connect(ring).connect(shaper).connect(lp).connect(gg).connect(bus);
+    growl.start(t);
+    mod.start(t);
+    growl.stop(t + 2.2);
+    mod.stop(t + 2.2);
+    for (const at of CONFIG.JUMPSCARE_FLICKER_HITS_S) {
+      this.stingStab(bus, t + at, l * 0.65);
+      this.stingShriek(bus, t + at, l * 0.5, 0.5);
+    }
+    // Tinnitus: a thin high whine that outlasts everything and fades away.
+    const tin = this.ctx.createOscillator();
+    tin.frequency.value = 6200;
+    const tg = this.ctx.createGain();
+    tg.gain.setValueAtTime(0.0001, t);
+    tg.gain.exponentialRampToValueAtTime(l * 0.05, t + 0.4);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + 5);
+    tin.connect(tg).connect(bus);
+    tin.start(t);
+    tin.stop(t + 5.1);
+  }
+
+  /** A dissonant cluster (minor seconds and a tritone) of distorted saws, hit hard and let ring. */
+  private stingStab(bus: AudioNode, t: number, l: number): void {
+    const shaper = this.ctx.createWaveShaper();
+    shaper.curve = distortionCurve(120);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'lowpass';
+    bp.frequency.setValueAtTime(5000, t);
+    bp.frequency.exponentialRampToValueAtTime(600, t + 1.2);
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.004, l * 0.45, 1.3);
+    shaper.connect(bp).connect(g).connect(bus);
+    for (const f of [116.5, 123.5, 164.8, 233, 246.9, 349.2]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.detune.setValueAtTime(0, t);
+      o.detune.linearRampToValueAtTime(-60, t + 1.4); // the whole chord sags as it dies
+      o.connect(shaper);
+      o.start(t);
+      o.stop(t + 1.5);
+    }
+  }
+
+  /** A metallic FM shriek tearing downward. */
+  private stingShriek(bus: AudioNode, t: number, l: number, durS: number): void {
+    const carrier = this.ctx.createOscillator();
+    carrier.frequency.setValueAtTime(2700, t);
+    carrier.frequency.exponentialRampToValueAtTime(1300, t + durS);
+    const mod = this.ctx.createOscillator();
+    mod.frequency.setValueAtTime(311, t);
+    mod.frequency.exponentialRampToValueAtTime(190, t + durS);
+    const depth = this.ctx.createGain();
+    depth.gain.value = 1600;
+    mod.connect(depth).connect(carrier.frequency);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2200;
+    bp.Q.value = 1.2;
+    const g = this.ctx.createGain();
+    envelope(g.gain, t, 0.006, l * 0.35, durS);
+    carrier.connect(bp).connect(g).connect(bus);
+    carrier.start(t);
+    mod.start(t);
+    carrier.stop(t + durS + 0.1);
+    mod.stop(t + durS + 0.1);
+  }
+
   /** You're caught: one heavy body-blow thud (sub drop, a dull knock and a short burst of low rumble) as the clip hits. */
   thud(): void {
     const t = this.ctx.currentTime;
@@ -359,6 +464,24 @@ export class Sfx {
     rasp.start(t + 0.25, Math.random());
     rasp.stop(t + 0.85);
     this.onSound(GATE.alerted);
+  }
+
+  /** Fetches and loops the background music for the rest of the session; it fades in at setBgmLevel's level. */
+  async startBgm(url: string): Promise<void> {
+    const res = await fetch(url);
+    const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(this.bgmGain);
+    src.start();
+  }
+
+  /** 0..1 of BGM_GAIN, eased over BGM_FADE_S. Cheap to call every frame. */
+  setBgmLevel(level: number): void {
+    if (Math.abs(level - this.bgmLevel) < 0.01) return;
+    this.bgmLevel = level;
+    this.bgmGain.gain.setTargetAtTime(CONFIG.BGM_GAIN * level, this.ctx.currentTime, CONFIG.BGM_FADE_S / 3);
   }
 
   /** Low ambient drone for atmosphere. Idempotent. */

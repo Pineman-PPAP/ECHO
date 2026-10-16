@@ -341,6 +341,7 @@ export class App {
     this.audio = audio;
     this.sfx = new Sfx(audio, (gateMs) => this.onGameSound(gateMs));
     this.sfx.playThrough(this.jumpVideo.video, CONFIG.JUMPSCARE_VIDEO_GAIN);
+    this.sfx.startBgm(`${import.meta.env.BASE_URL}bgm.ogg`).catch(() => {}); // no music is not fatal
     if (this.sim) {
       this.startLevel(this.levelIndex);
       return;
@@ -506,6 +507,7 @@ export class App {
           this.deathsHere++;
           this.sfx?.stalkerStop();
           this.sfx?.thud();
+          this.sfx?.jumpscareSting();
           const video = this.jumpVideo.ready;
           if (video) this.jumpVideo.play();
           this.debug.log(nowMs, e.by === 'hush' ? 'CAUGHT by the Hush' : e.by === 'stalker' ? 'CAUGHT by the Stalker' : `CAUGHT by #${e.monsterId}`);
@@ -657,6 +659,13 @@ export class App {
 
   private updateOverlays(nowMs: number, intent: PlayerIntent, frames: SensorFrames | null): void {
     const playing = this.state.kind === 'playing';
+    const kind = this.state.kind;
+    this.sfx?.setBgmLevel(
+      kind === 'calibrating' ? 0
+        : kind === 'caught' ? CONFIG.BGM_CAUGHT_DUCK
+          : playing && this.world.stalker.holding ? CONFIG.BGM_STALKER_DUCK
+            : 1,
+    );
     this.hud.show(playing);
     this.hud.update({
       levelName: this.world.level.def.name,
