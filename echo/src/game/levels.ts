@@ -70,6 +70,19 @@ export const LEVELS: LevelDef[] = [
       { c: 11, r: 7, dx: 0, dz: 0.75 },
       { c: 10, r: 9, dx: 0, dz: 0.75 },
       { c: 12, r: 11, dx: 0, dz: -0.75 },
+      // More along the whole route so a careless walk breaks one. On the inside of each turn, where
+      // a player who cuts the corner walks right into it:
+      { c: 1, r: 5, dx: 0.72, dz: -0.72 },
+      { c: 3, r: 5, dx: -0.72, dz: 0.72 },
+      { c: 12, r: 7, dx: -0.72, dz: 0.72 },
+      { c: 9, r: 9, dx: 0.72, dz: 0.72 },
+      { c: 9, r: 11, dx: 0.72, dz: -0.72 },
+      // ...and against one wall of the straights, a small drift off the centre line away from it:
+      { c: 3, r: 3, dx: 0, dz: 0.75 },
+      { c: 5, r: 7, dx: 0, dz: -0.75 },
+      { c: 7, r: 7, dx: 0, dz: 0.75 },
+      { c: 11, r: 9, dx: 0, dz: -0.75 },
+      { c: 10, r: 11, dx: 0, dz: -0.75 },
     ],
   },
   {
