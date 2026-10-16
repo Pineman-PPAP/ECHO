@@ -122,7 +122,7 @@ export class ManualOverlay {
     this.soundThreshold = document.createElement('u');
     this.meters.sound.row.querySelector('.mm-track')!.appendChild(this.soundThreshold);
     this.q.camLabel.textContent = sim ? 'DEV SIM · NO CAMERA' : 'YOU · LIVE';
-    this.q.skipText.textContent = sim ? 'DOUBLE SPACE TO SKIP' : 'DOUBLE CLAP TO SKIP';
+    this.q.skipText.textContent = sim ? 'PRESS SPACE TWICE QUICKLY TO SKIP' : 'CLAP TWICE QUICKLY TO SKIP';
     this.q.endHint.textContent = 'Entering the cave…';
   }
 

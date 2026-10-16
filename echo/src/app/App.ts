@@ -61,7 +61,7 @@ interface Stats {
 /**
  * The application: owns every subsystem and runs the state machine + frame loop.
  *
- *  title --click--> loading --> calibrating --> manual (first time only) --> intro --clap/timeout--> playing <--> paused (face lost)
+ *  title --click--> loading --> calibrating --> manual (first time only) --> playing <--> paused (face lost)
  *                                  ^                                     |  |
  *                                  |  hum (new player)                   |  +--exit--> escaped --clap--> intro (next level)
  *                                  +------------- gameover <-- caught <--+                 \--last level--> victory --clap--> intro
