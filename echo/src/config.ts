@@ -317,13 +317,15 @@ export const CONFIG = {
   /** The drone fades out as a Hollow comes within DRONE_CUT_RADIUS_M (silent at DRONE_SILENT_RADIUS_M), as the Hush nears, and in quiet zones. */
   DRONE_GAIN: 0.035,
   /**
-   * Background music (public/bgm.ogg) through the whole game from the Begin click on: calibration,
-   * menus, every level, the Stalker, the retry screen. Only the jumpscare sinks it to BGM_CAUGHT_DUCK
-   * so the clip hits; level changes ease over BGM_FADE_S.
+   * Background music (public/bgm.ogg) through the whole game, from the title screen (as soon as the
+   * browser allows sound) through calibration, menus, every level, the Stalker and the retry screen.
+   * Only the jumpscare sinks it to BGM_CAUGHT_DUCK so the clip hits, and its cut to black silences it
+   * over BGM_CUT_FADE_S; other level changes ease over BGM_FADE_S. Scaled by MASTER_VOLUME too.
    */
-  BGM_GAIN: 0.35,
+  BGM_GAIN: 0.7,
   BGM_FADE_S: 1.5,
   BGM_CAUGHT_DUCK: 0.15,
+  BGM_CUT_FADE_S: 0.05,
   DRONE_CUT_RADIUS_M: 9,
   DRONE_SILENT_RADIUS_M: 3,
   /** Seconds for the drone to fade to a new level. */

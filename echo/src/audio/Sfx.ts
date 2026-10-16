@@ -67,9 +67,6 @@ export class Sfx {
     /** The STAND STILL swell, cut dead when the face appears. */
     swell: AudioScheduledSourceNode[] | null;
   } | null = null;
-  /** Background music (public/bgm.ogg, a seamless loop) under everything; App sets its level each frame. */
-  private readonly bgmGain: GainNode;
-  private bgmLevel = -1;
   /** The current scream goes through this, so the jumpscare can cut it dead. */
   private screamBus: GainNode | null = null;
 
@@ -100,10 +97,6 @@ export class Sfx {
     this.guidePanner = this.makePanner();
     this.guidePanner.refDistance = CONFIG.DRAFT_REF_DISTANCE_M;
     this.guidePanner.connect(this.master);
-
-    this.bgmGain = ctx.createGain();
-    this.bgmGain.gain.value = 0;
-    this.bgmGain.connect(this.master);
 
     this.droneGain = ctx.createGain();
     this.droneGain.gain.value = CONFIG.DRONE_GAIN;
@@ -464,24 +457,6 @@ export class Sfx {
     rasp.start(t + 0.25, Math.random());
     rasp.stop(t + 0.85);
     this.onSound(GATE.alerted);
-  }
-
-  /** Fetches and loops the background music for the rest of the session; it fades in at setBgmLevel's level. */
-  async startBgm(url: string): Promise<void> {
-    const res = await fetch(url);
-    const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    src.loop = true;
-    src.connect(this.bgmGain);
-    src.start();
-  }
-
-  /** 0..1 of BGM_GAIN, eased over BGM_FADE_S. Cheap to call every frame. */
-  setBgmLevel(level: number): void {
-    if (Math.abs(level - this.bgmLevel) < 0.01) return;
-    this.bgmLevel = level;
-    this.bgmGain.gain.setTargetAtTime(CONFIG.BGM_GAIN * level, this.ctx.currentTime, CONFIG.BGM_FADE_S / 3);
   }
 
   /** Low ambient drone for atmosphere. Idempotent. */

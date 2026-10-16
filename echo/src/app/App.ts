@@ -1,3 +1,4 @@
+import { Bgm } from '../audio/Bgm';
 import { Sfx } from '../audio/Sfx';
 import { CONFIG } from '../config';
 import { dripImpacts, dripSpots, levelSeed, type DripSpot } from '../game/caveLife';
@@ -93,7 +94,9 @@ export class App {
   private readonly devBadge: HTMLElement;
   private readonly sim: SimInput | null;
   private sensors: Sensors | null = null;
-  private audio: AudioContext | null = null;
+  /** Made at page load (suspended until the browser allows sound) so the music can start on the title screen. */
+  private readonly audio = new AudioContext({ latencyHint: 'interactive' });
+  private readonly bgm = new Bgm(this.audio, `${import.meta.env.BASE_URL}bgm.ogg`);
   private sfx: Sfx | null = null;
   private calib: CalibrationData = defaultCalibration();
   private readonly intents = new IntentBuilder(this.calib);
@@ -139,6 +142,9 @@ export class App {
     this.world = new World(LEVELS[this.levelIndex], this.levelIndex + 1);
     this.renderer.loadLevel(this.world.level);
     document.addEventListener('visibilitychange', this.onVisibility);
+    // Start the music now if autoplay is allowed, else on the first click or key press anywhere.
+    void this.audio.resume();
+    for (const type of ['pointerdown', 'keydown', 'touchstart']) document.addEventListener(type, this.unlockAudio, true);
   }
 
   start(): void {
@@ -333,15 +339,13 @@ export class App {
     this.lowFpsSinceMs = null;
   }
 
-  /** Called from the Begin button's click handler: audio MUST be created synchronously here. */
+  /** Called from the Begin button's click handler: the click lets the page's AudioContext run (resumed synchronously here). */
   private begin(): void {
     if (this.state.kind !== 'title') return;
-    const audio = new AudioContext({ latencyHint: 'interactive' });
+    const audio = this.audio;
     void audio.resume();
-    this.audio = audio;
     this.sfx = new Sfx(audio, (gateMs) => this.onGameSound(gateMs));
     this.sfx.playThrough(this.jumpVideo.video, CONFIG.JUMPSCARE_VIDEO_GAIN);
-    this.sfx.startBgm(`${import.meta.env.BASE_URL}bgm.ogg`).catch(() => {}); // no music is not fatal
     if (this.sim) {
       this.startLevel(this.levelIndex);
       return;
@@ -369,11 +373,18 @@ export class App {
    * The frame loop stops while the tab is hidden, so pausing has to happen here, in the event.
    * On return the normal paused logic resumes play once the face is seen again.
    */
+  private readonly unlockAudio = (): void => {
+    void this.audio.resume().then(() => {
+      if (this.audio.state !== 'running') return;
+      for (const type of ['pointerdown', 'keydown', 'touchstart']) document.removeEventListener(type, this.unlockAudio, true);
+    });
+  };
+
   private readonly onVisibility = (): void => {
     if (document.hidden) {
       if (this.state.kind === 'playing') this.setState({ kind: 'paused', faceBackSinceMs: null });
     } else {
-      void this.audio?.resume();
+      void this.audio.resume();
     }
   };
 
@@ -659,7 +670,10 @@ export class App {
 
   private updateOverlays(nowMs: number, intent: PlayerIntent, frames: SensorFrames | null): void {
     const playing = this.state.kind === 'playing';
-    this.sfx?.setBgmLevel(this.state.kind === 'caught' ? CONFIG.BGM_CAUGHT_DUCK : 1);
+    const st = this.state;
+    if (st.kind !== 'caught') this.bgm.setLevel(1);
+    else if (st.cut) this.bgm.setLevel(0, CONFIG.BGM_CUT_FADE_S);
+    else this.bgm.setLevel(CONFIG.BGM_CAUGHT_DUCK);
     this.hud.show(playing);
     this.hud.update({
       levelName: this.world.level.def.name,
