@@ -13,7 +13,7 @@ export class FireflyJar {
   excitement = 0;
 
   update(dtS: number, hum: HumParams | null): void {
-    const target = hum ? CONFIG.JAR_MIN_HUM_GLOW + (1 - CONFIG.JAR_MIN_HUM_GLOW) * Math.min(hum.level, 1) : 0;
+    const target = hum ? CONFIG.JAR_MIN_HUM_GLOW + (1 - CONFIG.JAR_MIN_HUM_GLOW) * Math.pow(Math.min(Math.max(hum.level, 0), 1), CONFIG.JAR_HUM_CURVE) : 0;
     this.glow = ease(this.glow, target, dtS, target > this.glow ? CONFIG.JAR_WAKE_S : CONFIG.JAR_SLEEP_S);
     // Finish the fade below the visible-light threshold, rather than retaining an idle glow.
     if (!hum && this.glow < CONFIG.JAR_LIT_MIN) this.glow = 0;

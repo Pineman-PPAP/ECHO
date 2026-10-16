@@ -114,9 +114,14 @@ export const CONFIG = {
    * and fades naturally with JAR_SLEEP_S when the hum gets quieter or stops. Silence eventually
    * reaches zero glow; there is no idle light. Any detected hum gives at least JAR_MIN_HUM_GLOW.
    */
-  JAR_WAKE_S: 0.35,
+  JAR_WAKE_S: 0.2,
   JAR_SLEEP_S: 0.55,
-  JAR_MIN_HUM_GLOW: 0.35,
+  JAR_MIN_HUM_GLOW: 0.55,
+  /**
+   * Glow follows hum level ^ JAR_HUM_CURVE: below 1 a quiet hum lights a lot (0.5: a quarter-loud hum
+   * gives half the extra glow), so a soft "hmm" is enough to see by.
+   */
+  JAR_HUM_CURVE: 0.5,
   /** Glow below this lights nothing and reveals nothing. */
   JAR_LIT_MIN: 0.05,
   /** Light reaches this far at the faintest glow and at a full (calibrated) hum. All around you, not a cone. */

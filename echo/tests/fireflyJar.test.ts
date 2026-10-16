@@ -49,6 +49,17 @@ describe('FireflyJar', () => {
     expect(faint.radius).toBeGreaterThan(CONFIG.JAR_MIN_RADIUS_M);
   });
 
+  it('a quiet hum lights the jar a lot: a quarter-loud hum gives far more than a quarter of the extra glow', () => {
+    const lo = CONFIG.HUM_MIN_ABOVE_FLOOR_DB;
+    const quiet = humFromMic(lo + (30 - lo) * 0.25, 220, 30);
+    expect(quiet.level).toBeCloseTo(0.25);
+    const jar = new FireflyJar();
+    run(jar, 3, quiet);
+    const extra = (jar.glow - CONFIG.JAR_MIN_HUM_GLOW) / (1 - CONFIG.JAR_MIN_HUM_GLOW);
+    expect(extra).toBeCloseTo(Math.pow(0.25, CONFIG.JAR_HUM_CURVE), 2);
+    expect(extra).toBeGreaterThan(0.4);
+  });
+
   it('a higher note excites the fireflies', () => {
     const low = new FireflyJar();
     const high = new FireflyJar();
