@@ -1,0 +1,277 @@
+{
+  "states": [
+    {
+      "state": "manual",
+      "beat": "jar",
+      "phase": "setup",
+      "phaseMs": 50,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 964
+    },
+    {
+      "state": "manual",
+      "beat": "jar",
+      "phase": "await",
+      "step": "hum",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 3350
+    },
+    {
+      "state": "manual",
+      "beat": "jar",
+      "phase": "stepOk",
+      "step": "hum",
+      "phaseMs": 0,
+      "glow": 0.8324514009425363,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 7047
+    },
+    {
+      "state": "manual",
+      "beat": "jar",
+      "phase": "await",
+      "step": "quiet",
+      "phaseMs": 0,
+      "glow": 0.5283872211760862,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 7589
+    },
+    {
+      "state": "manual",
+      "beat": "jar",
+      "phase": "confirm",
+      "step": "quiet",
+      "phaseMs": 0,
+      "glow": 0.10286996881520574,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 9288
+    },
+    {
+      "state": "manual",
+      "beat": "look",
+      "phase": "setup",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 11617
+    },
+    {
+      "state": "manual",
+      "beat": "look",
+      "phase": "await",
+      "step": "turnLeft",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 13663
+    },
+    {
+      "state": "manual",
+      "beat": "look",
+      "phase": "stepOk",
+      "step": "turnLeft",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 14957
+    },
+    {
+      "state": "manual",
+      "beat": "look",
+      "phase": "await",
+      "step": "turnRight",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 15415
+    },
+    {
+      "state": "manual",
+      "beat": "look",
+      "phase": "confirm",
+      "step": "turnRight",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 16860
+    },
+    {
+      "state": "manual",
+      "beat": "move",
+      "phase": "setup",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 19262
+    },
+    {
+      "state": "manual",
+      "beat": "move",
+      "phase": "await",
+      "step": "leanIn",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 54,
+      "wallMs": 21001
+    },
+    {
+      "state": "manual",
+      "beat": "move",
+      "phase": "stepOk",
+      "step": "leanIn",
+      "phaseMs": 50,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 53.040463937457005,
+      "wallMs": 22483
+    },
+    {
+      "state": "manual",
+      "beat": "move",
+      "phase": "await",
+      "step": "leanBack",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 53.040463937457005,
+      "wallMs": 22873
+    },
+    {
+      "state": "manual",
+      "beat": "move",
+      "phase": "confirm",
+      "step": "leanBack",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 53.474292117093086,
+      "wallMs": 24379
+    },
+    {
+      "state": "manual",
+      "beat": "hear",
+      "phase": "cut",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 11.894090744924615,
+      "wallMs": 26563
+    },
+    {
+      "state": "manual",
+      "beat": "hear",
+      "phase": "setup",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 12,
+      "wallMs": 27403
+    },
+    {
+      "state": "manual",
+      "beat": "hear",
+      "phase": "await",
+      "step": "clapReveal",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "idle",
+      "distance": 12,
+      "wallMs": 29199
+    },
+    {
+      "state": "manual",
+      "beat": "hear",
+      "phase": "stepOk",
+      "step": "clapReveal",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "alert",
+      "distance": 11.6419125,
+      "wallMs": 30006
+    },
+    {
+      "state": "manual",
+      "beat": "hear",
+      "phase": "await",
+      "step": "watch",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "alert",
+      "distance": 10.779458797675638,
+      "wallMs": 30896
+    },
+    {
+      "state": "manual",
+      "beat": "hear",
+      "phase": "confirm",
+      "step": "watch",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "alert",
+      "distance": 4.428658312368167,
+      "wallMs": 36213
+    },
+    {
+      "state": "manual",
+      "beat": null,
+      "phase": "end",
+      "phaseMs": 0,
+      "glow": 0,
+      "hollow": "alert",
+      "distance": 4.428658312368167,
+      "wallMs": 38288
+    },
+    {
+      "state": "playing",
+      "distance": null,
+      "tutorial": "exit",
+      "wallMs": 42130
+    }
+  ],
+  "final": {
+    "state": "playing",
+    "tutorial": "exit"
+  },
+  "errors": [],
+  "screenshots": [
+    "jar-setup",
+    "jar-hum-instruction",
+    "jar-hum-live",
+    "jar-quiet-instruction",
+    "jar-fading",
+    "jar-confirm",
+    "look-setup",
+    "look-turnLeft-instruction",
+    "look-turnLeft-live",
+    "look-turnRight-instruction",
+    "look-turnRight-live",
+    "look-confirm",
+    "move-setup",
+    "move-leanIn-instruction",
+    "move-leanIn-live",
+    "move-leanBack-instruction",
+    "move-leanBack-live",
+    "move-confirm",
+    "hear-setup",
+    "hear-clapReveal-instruction",
+    "hear-hunt-live",
+    "hear-confirm",
+    "08-ending",
+    "09-game-started"
+  ]
+}

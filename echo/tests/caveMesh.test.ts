@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { cellCenter, collidesCircle, isWall, parseLevel } from '../src/game/grid';
-import { LEVELS } from '../src/game/levels';
+import { FIELD_MANUAL_LEVEL, LEVELS } from '../src/game/levels';
 import { buildCaveMesh, CaveField, floorAt, planDistance, wallDistance } from '../src/render/caveMesh';
 
 /** No rock may come closer to any position the camera can reach than the camera's near plane. */
@@ -17,7 +17,7 @@ describe('planDistance', () => {
   });
 });
 
-for (const def of LEVELS) {
+for (const def of [...LEVELS, FIELD_MANUAL_LEVEL]) {
   describe(`cave mesh: ${def.id}`, () => {
     const l = parseLevel(def);
     const t0 = performance.now();

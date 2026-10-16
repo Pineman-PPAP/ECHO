@@ -53,7 +53,7 @@ npm run demo     # production build, opens full-screen Chrome/Chromium on http:/
 | `npm run check` | TypeScript check + 170 unit tests (vitest) |
 | `npm run build` | Typecheck + production build into `dist/` |
 
-**URL flags:** `?debug=1` pipeline/debug panel (toggle with the backtick key) · `?level=N` start at level N (0 = tutorial) · `?skipcal=1` skip calibration · `?sim=1` keyboard input, **development only**.
+**URL flags:** `?debug=1` pipeline/debug panel (toggle with the backtick key) · `?level=N` start at level N (0 = tutorial) · `?skipcal=1` skip calibration · `?manual=0` skip the Field Manual · `?sim=1` keyboard input, **development only**.
 
 **New player:** reload the page (F5) and click Begin; that reruns calibration. Venue setup (power mode, mic gain, symptom → setting table): [`DEMO_TUNING.md`](DEMO_TUNING.md).
 
@@ -77,6 +77,7 @@ The game logic never touches a sensor: it only receives a `PlayerIntent` (turn r
 - **Face** (`face/`): MediaPipe Tasks Vision 0.10.35, GPU delegate with CPU fallback. The face transformation matrix gives head yaw and depth; both are smoothed with One-Euro filters. Yaw drives a turn *rate* (dead zone, then a curve), so you can keep looking at the screen while turning. Lean = rest depth / current depth − 1.
 - **Mic** (`audio/`): processed in 128-sample hops. A percentile noise floor tracks the room. A sharp rise starts a clap candidate, which must decay at least 8 dB for 5 ms within 75 ms and have a percussive peak before it emits an **onset**. This rejects sustained room-noise increases and abrupt hums; measured claps usually confirm in a few tens of milliseconds. The player's calibrated clap also filters out much fainter transients. Actual nearby claps can still resemble player claps to a single microphone. A **hum** is a voiced YIN pitch that stays steady (small pitch spread) above the floor.
 - **Calibration** (`calibration.ts`, ~45 s, hands-free): face check, quiet room (noise floor), neutral pose, look left (measures the yaw sign), a normal clap and a normal hum (loudness references), and a speaker-leak test. Each step first says what to do and why it matters in the cave, with a countdown (nothing is measured yet), then measures with a live reading ("Turned 14°", "Claps heard: 1 of 2", "Hearing your hum: 131 Hz"), then shows what it measured. The last screen lists every control. It is paced so a first-time player, and anyone watching, can follow it.
+- **Field Manual** (once after calibration): a short interactive intro, four brief scenes: hum to wake the fireflies, stop to watch them fade, turn left/right, lean forward/back, then clap to reveal a blind Hollow following the sound. Real input and the existing cave renderer; the safe Hollow cannot catch you. Double clap to skip at any point. Hints repeat instead of falsely completing lessons. A brief “Find the way out” caption transitions straight into play, with no second intro card. The tutorial cave remains for exploration; its repeated control prompts are shortened after a completed intro. Speaker-leak calibration makes the intro silent so the mic can listen.
 - **Mapping** (`mapping.ts`): clap loudness → pulse radius 5–24 m; hum level → the firefly jar's glow (`game/FireflyJar.ts`: eases up in ~0.35 s, fades naturally after humming stops; reach 3.5–9 m all around); hum pitch (log scale, 110–300 Hz) → how excited the fireflies are (visual only).
 
 ### Game rules (`echo/src/game/`, pure TypeScript, unit-tested)
@@ -106,7 +107,7 @@ All sound is synthesized (no audio files) with Web Audio; creatures, the draft, 
 ### Layout
 
 ```
-echo/src/app/      App: frame loop + state machine (title, calibration, intro, play, pause, menus), URL flags
+echo/src/app/      App: frame loop + state machine (title, calibration, Field Manual, intro, play, pause, menus), URL flags
 echo/src/input/    sensors, signal processing, calibration, intent mapping, dev keyboard input
 echo/src/game/     pure game logic: world, player, monsters, Hush, hearing, levels, moments, cave life
 echo/src/render/   three.js: cave mesh, reveal shader, eyes, afterimages, arrows, bats/dust/drips/remains

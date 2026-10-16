@@ -5,6 +5,7 @@ import type { World } from '../game/World';
 import { Afterimages } from './Afterimages';
 import { buildLevelMeshes } from './buildLevelMesh';
 import { CaveLife } from './CaveLife';
+import type { CameraPose } from './CinematicCamera';
 import { EyeGlow } from './EyeGlow';
 import { FireflyJarView } from './FireflyJarView';
 import { GuideTrail } from './GuideTrail';
@@ -49,6 +50,9 @@ export class Renderer {
   private lastYaw = 0;
   /** Game-clock time the jar was first raised (null = play has not started). */
   private jarIntroStartS: number | null = null;
+  /** Field Manual: the cinematic camera offset (null = plain first person) and the jar's close-up (0..1). */
+  private cinematic: CameraPose | null = null;
+  private jarOffer = 0;
 
   constructor(private readonly container: HTMLElement) {
     this.gl = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -95,7 +99,17 @@ export class Renderer {
     return k * k * (3 - 2 * k);
   }
 
-  /** Camera shake (the Stalker's face arriving). */
+  /** Field Manual: offset the camera from the player's eyes (null = the plain first-person view). */
+  setCinematic(pose: CameraPose | null): void {
+    this.cinematic = pose;
+  }
+
+  /** Field Manual: 0 = the jar is held in the left hand, 1 = brought forward for its close-up. */
+  setJarOffer(offer: number): void {
+    this.jarOffer = offer;
+  }
+
+  /** Camera shake (the Stalker arriving for its stare; the Field Manual). */
   shake(amplitude: number, durationS: number, clockS: number): void {
     this.shakeAmp = amplitude;
     this.shakeUntilS = clockS + durationS;
@@ -114,6 +128,21 @@ export class Renderer {
     const bob = Math.sin(p.bobPhase) * 0.035;
     this.camera.position.set(p.x, CONFIG.EYE_HEIGHT + bob, p.z);
     this.camera.rotation.set(0, p.yaw, 0);
+    let fov: number = CONFIG.CAMERA_FOV_DEG;
+    const c = this.cinematic;
+    if (c) {
+      // Offsets are in the camera's own frame: forward = (-sin yaw, -cos yaw), right = (cos yaw, -sin yaw).
+      const yaw = p.yaw + c.yaw;
+      this.camera.position.x += -Math.sin(yaw) * c.forward + Math.cos(yaw) * c.right;
+      this.camera.position.y += c.up;
+      this.camera.position.z += -Math.cos(yaw) * c.forward - Math.sin(yaw) * c.right;
+      this.camera.rotation.set(c.pitch, yaw, c.roll);
+      fov = c.fov;
+    }
+    if (this.camera.fov !== fov) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     if (clockS < this.shakeUntilS) {
       this.camera.position.x += (Math.random() - 0.5) * this.shakeAmp;
       this.camera.position.y += (Math.random() - 0.5) * this.shakeAmp;
@@ -133,7 +162,7 @@ export class Renderer {
     this.jar.root.position.copy(this.camera.position);
     this.jar.root.quaternion.copy(this.camera.quaternion);
     const presence = this.jarPresence(clockS);
-    this.jar.update(dtS, clockS, jar.glow, jar.excitement, p.bobPhase, turnRate, presence);
+    this.jar.update(dtS, clockS, jar.glow, jar.excitement, p.bobPhase, turnRate, presence, this.jarOffer);
     this.jar.root.updateMatrixWorld(true);
     u.uJarPos.value.copy(this.jar.worldCenter(this.jarPos));
     u.uJarRadius.value = jar.radius;
