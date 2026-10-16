@@ -1,7 +1,7 @@
 import { CONFIG } from '../config';
 import type { PlayerIntent } from '../input/intent';
 
-/** The lessons, in order. 'dark' is the opening; the rest are chapters I to VII. */
+/** Shot identifiers; the short intro uses jar → look → move → hear. */
 export type BeatId = 'dark' | 'look' | 'move' | 'clap' | 'jar' | 'hear' | 'freeze' | 'hush';
 
 /**
@@ -26,6 +26,7 @@ export type StepId =
   | 'turnRight'
   | 'leanIn'
   | 'sitBack'
+  | 'leanBack'
   | 'clap'
   | 'softLoud'
   | 'hum'
@@ -71,207 +72,43 @@ interface BeatDef {
 
 const BEATS: BeatDef[] = [
   {
-    id: 'dark',
-    title: 'You can’t see',
-    lines: ['No controller. No keyboard.', 'Only your face and your voice.', 'Learn them here, where nothing can hurt you.'],
-    steps: [],
-    done: '',
-    holdShot: true,
-    setupMs: CONFIG.MANUAL_OPEN_MS,
+    id: 'jar', title: 'Wake the light', lines: ['Your hum wakes the fireflies.'], holdShot: true,
+    steps: [
+      { id: 'hum', text: 'Hum “Mmmmm” to wake them. Louder means brighter.', keys: '[hold H]', hint: 'Hold one steady note with your mouth closed.', gesture: 'hum', meter: 'hum', slow: true },
+      { id: 'quiet', text: 'Stop humming. Watch the light fade.', keys: '[release H]', hint: 'Let the note go. The jar stays in your hand.', gesture: 'quiet', meter: 'hum', slow: false },
+    ],
+    done: 'Soft light. Only creatures nearby can hear your hum.',
   },
   {
-    id: 'look',
-    title: 'Look around',
-    lines: ['Your head steers.'],
+    id: 'look', title: 'Look around', lines: ['Your head steers.'], holdShot: false, glow: true,
     steps: [
-      {
-        id: 'turnLeft',
-        text: 'Turn your head to your LEFT, and hold it there.',
-        keys: '[hold ←]',
-        hint: 'Turn a little further, past the line, and hold.',
-        gesture: 'turnLeft',
-        meter: 'turn',
-        slow: true,
-      },
-      {
-        id: 'turnRight',
-        text: 'Now turn to your RIGHT.',
-        keys: '[hold →]',
-        hint: 'Turn your head to the right, past the line, and hold.',
-        gesture: 'turnRight',
-        meter: 'turn',
-        slow: true,
-      },
+      { id: 'turnLeft', text: 'Turn your head left.', keys: '[hold ←]', hint: 'Turn slightly past the marker and hold.', gesture: 'turnLeft', meter: 'turn', slow: true },
+      { id: 'turnRight', text: 'Now turn right. Face forward to stop.', keys: '[hold →]', hint: 'Turn right past the marker.', gesture: 'turnRight', meter: 'turn', slow: true },
     ],
-    done: 'Hold a turn to keep turning. Face the screen to stop.',
-    holdShot: false,
-    glow: true,
+    done: 'Hold a turn to keep turning. Centre your head to stop.',
   },
   {
-    id: 'move',
-    title: 'Walk',
-    lines: ['Your body walks.'],
+    id: 'move', title: 'Keep moving', lines: ['Lean to walk.'], holdShot: false, aim: true, glow: true,
     steps: [
-      {
-        id: 'leanIn',
-        text: 'Lean toward the screen.',
-        keys: '[hold ↑]',
-        hint: 'Lean in a little more, past the line.',
-        gesture: 'leanIn',
-        meter: 'lean',
-        slow: true,
-      },
-      {
-        id: 'sitBack',
-        text: 'Sit back to stop.',
-        keys: '[release ↑]',
-        hint: 'Sit back to where you started.',
-        gesture: 'leanBack',
-        meter: 'lean',
-        slow: true,
-      },
+      { id: 'leanIn', text: 'Lean toward the screen to walk forward.', keys: '[hold ↑]', hint: 'Lean closer than your calibrated resting position.', gesture: 'leanIn', meter: 'lean', slow: true },
+      { id: 'leanBack', text: 'Lean back to reverse. Rest in the middle to stop.', keys: '[hold ↓]', hint: 'Lean farther back than where you started.', gesture: 'leanBack', meter: 'lean', slow: true },
     ],
-    done: 'Lean further to go faster. Lean gently to sneak: footsteps make noise.',
-    holdShot: false,
-    aim: true,
-    glow: true,
+    done: 'Forward. Back. Rest in the middle to stop.',
   },
   {
-    id: 'clap',
-    title: 'Sound is sight',
-    lines: ['Down here, sound is your only light.'],
+    id: 'hear', title: 'It hears you', lines: ['The Hollow is blind. It hunts sound.'], holdShot: true, cut: true,
     steps: [
-      {
-        id: 'clap',
-        text: 'Clap your hands once.',
-        keys: '[Space]',
-        hint: 'One sharp clap.',
-        gesture: 'clap',
-        meter: 'sound',
-        slow: true,
-      },
-      {
-        id: 'softLoud',
-        text: 'Now a soft tongue click… then a LOUD clap.',
-        keys: '[Shift+Space, then Space]',
-        hint: 'Any two sharp sounds: one soft, one loud.',
-        gesture: 'clickClap',
-        meter: 'sound',
-        slow: true,
-      },
+      { id: 'clapReveal', text: 'Clap once. See the cave—and what hears you.', keys: '[Space]', hint: 'One sharp clap. Louder reveals farther and travels farther.', gesture: 'clap', meter: 'sound', slow: true },
+      { id: 'watch', text: 'It heard you. It follows the sound to where you clapped.', keys: '', hint: '', gesture: 'none', meter: 'none', slow: false, auto: true },
     ],
-    done: 'Louder shows you more of the cave. It also carries further.',
-    holdShot: true,
-    aim: true,
-  },
-  {
-    id: 'jar',
-    title: 'The jar',
-    lines: ['In your left hand: a jar of sleeping fireflies.'],
-    steps: [
-      {
-        id: 'hum',
-        text: 'Hum a steady note. “Mmmmm.”',
-        keys: '[hold H]',
-        hint: 'One steady note with your mouth closed: “mmmmm”.',
-        gesture: 'hum',
-        meter: 'hum',
-        slow: true,
-      },
-      {
-        id: 'quiet',
-        text: 'Now stop. Watch them fall asleep.',
-        keys: '[release H]',
-        hint: 'Stop humming for a moment.',
-        gesture: 'quiet',
-        meter: 'hum',
-        slow: false,
-      },
-    ],
-    done: 'Humming is soft light all around you. Only something right beside you hears it.',
-    holdShot: true,
-  },
-  {
-    id: 'hear',
-    title: 'They hear you',
-    lines: ['Something lives down here.', 'It is blind. It hunts by sound.'],
-    steps: [
-      {
-        id: 'clapReveal',
-        text: 'It is somewhere down this tunnel. Clap, LOUD.',
-        keys: '[Space]',
-        hint: 'Louder. It didn’t hear that.',
-        gesture: 'clap',
-        meter: 'sound',
-        slow: true,
-      },
-      {
-        id: 'watch',
-        text: 'It heard you. It is coming to where you clapped.',
-        keys: '',
-        hint: '',
-        gesture: 'none',
-        meter: 'none',
-        slow: false,
-        auto: true,
-      },
-      {
-        id: 'clapAgain',
-        text: 'It stopped. Clap again.',
-        keys: '[Space]',
-        hint: 'Clap to see where it is now.',
-        gesture: 'clap',
-        meter: 'sound',
-        slow: true,
-      },
-    ],
-    done: 'Every clap shows you the cave, and tells them where you are.',
-    holdShot: true,
-    cut: true,
-  },
-  {
-    id: 'freeze',
-    title: 'Freeze',
-    lines: ['Break something down here,', 'and something else comes for you.'],
-    steps: [
-      {
-        id: 'hold',
-        text: 'It is staring at you. Don’t move. Don’t make a sound.',
-        keys: '[no keys]',
-        hint: 'Stay perfectly still and silent until it turns away.',
-        gesture: 'freeze',
-        meter: 'still',
-        slow: false,
-      },
-    ],
-    done: 'It turned away. When it stares, stillness is the only way out.',
-    holdShot: true,
-    setupMs: CONFIG.MANUAL_STALKER_APPROACH_MS,
-  },
-  {
-    id: 'hush',
-    title: 'Don’t stay silent',
-    lines: ['Stay quiet too long,', 'and something else is drawn to the silence.'],
-    steps: [
-      {
-        id: 'sound',
-        text: 'Make a sound. Clap, or hum.',
-        keys: '[Space or H]',
-        hint: 'Any sound: a clap or a hum.',
-        gesture: 'sound',
-        meter: 'sound',
-        slow: true,
-      },
-    ],
-    done: 'Sound drives it back. Too much brings the others. Find the balance.',
-    holdShot: true,
+    done: 'Every way of seeing makes a sound. Keep moving.',
   },
 ];
 
 /** The lessons that teach the four controls; when all four were done by the player, the tutorial level skips its own teaching. */
-const BASICS: readonly BeatId[] = ['look', 'move', 'clap', 'jar'];
+const BASICS: readonly BeatId[] = ['jar', 'look', 'move', 'hear'];
 
-const TIMEOUT_TEXT = 'Let’s move on. You’ll get another chance in the cave.';
+const TIMEOUT_TEXT = 'Take your time. Try again, or double clap to skip the manual.';
 
 /** What the manual needs to know about its scene (the director reads it from the World each frame). */
 export interface ManualWorldView {
@@ -287,7 +124,7 @@ export type ManualEvent =
   | { type: 'place'; beat: BeatId }
   | { type: 'stepStart'; beat: BeatId; step: StepId }
   | { type: 'stepDone'; beat: BeatId; step: StepId }
-  /** The player didn't manage a step in MANUAL_TIMEOUT_MS: the lesson is passed for them. */
+  /** Repeat assistance without falsely marking the action as learned. */
   | { type: 'timeout'; beat: BeatId; step: StepId }
   | { type: 'beatDone'; beat: BeatId; learned: boolean }
   /** They moved or made a sound during the Stalker's stare. */
@@ -367,7 +204,7 @@ export interface ManualFrame {
  * it the frame time, the PlayerIntent and two facts about the scene; it says what to show and when the
  * scene must change. Success is judged ONLY from PlayerIntent, the same stream the game uses, so a lesson
  * passes exactly when the game itself would have reacted. Every waiting step shows a hint after
- * MANUAL_HINT_MS and is passed after MANUAL_TIMEOUT_MS, a held hum skips to the recap, and nothing
+ * MANUAL_HINT_MS, repeats help after MANUAL_TIMEOUT_MS, and supports a double clap to skip. Nothing
  * advances while the face is away: it can never soft-lock.
  */
 export class FieldManual {
@@ -386,12 +223,15 @@ export class FieldManual {
   private tooQuiet = false;
   private lastClapMs: number | null = null;
   private sinceFlinchMs = 0;
-  private jarSeen = false;
+  private jarSeen = true;
   private skipMs = 0;
+  private elapsedMs = 0;
+  private skipClapMs = -Infinity;
+  private nextHintMs: number = CONFIG.MANUAL_TIMEOUT_MS;
   /** A skip hum must START while skipping is allowed (a hum carried over from the jar lesson doesn't count). */
   private skipEligible = true;
   private readonly learned = new Set<BeatId>();
-  private events: ManualEvent[] = [{ type: 'beatStart', beat: 'dark' }];
+  private events: ManualEvent[] = [{ type: 'beatStart', beat: 'jar' }];
 
   constructor(private readonly sim: boolean) {}
 
@@ -411,6 +251,7 @@ export class FieldManual {
       return this.frame(true);
     }
     const dt = Math.max(0, dtMs);
+    this.elapsedMs += dt;
     this.phaseMs += dt;
     this.beatMs += dt;
     if (this.updateSkip(dt, intent)) return this.frame(false);
@@ -459,16 +300,20 @@ export class FieldManual {
     let done = false;
     switch (step.id) {
       case 'turnLeft':
-        this.acc += Math.max(intent.turnRate, 0) * s;
+        this.acc = intent.turnRate > 0 ? this.acc + intent.turnRate * s : 0;
         done = this.acc >= CONFIG.MANUAL_LOOK_RAD;
         break;
       case 'turnRight':
-        this.acc += Math.max(-intent.turnRate, 0) * s;
+        this.acc = intent.turnRate < 0 ? this.acc - intent.turnRate * s : 0;
         done = this.acc >= CONFIG.MANUAL_LOOK_RAD;
         break;
       case 'leanIn':
         this.acc += Math.max(intent.moveSpeed, 0) * s;
         done = this.acc >= CONFIG.MANUAL_WALK_M;
+        break;
+      case 'leanBack':
+        this.acc += Math.max(-intent.moveSpeed, 0) * s;
+        done = this.acc >= CONFIG.MANUAL_BACK_M;
         break;
       case 'sitBack':
         this.acc = intent.moveSpeed <= 0 ? this.acc + dt : 0;
@@ -479,11 +324,14 @@ export class FieldManual {
         done = intent.pulses.length > 0;
         break;
       case 'softLoud':
-        this.acc += intent.pulses.length;
+        for (const loudness of intent.pulses) {
+          if (this.acc === 0 && loudness < CONFIG.MANUAL_SOFT_MAX) this.acc = 1;
+          else if (this.acc === 1 && loudness >= CONFIG.MANUAL_LOUD_MIN) this.acc = CONFIG.MANUAL_CLAP_EXTRA;
+        }
         done = this.acc >= CONFIG.MANUAL_CLAP_EXTRA;
         break;
       case 'hum':
-        if (intent.hum) this.acc += dt;
+        this.acc = intent.hum ? this.acc + dt : 0;
         done = this.acc >= CONFIG.MANUAL_HUM_MS;
         break;
       case 'quiet':
@@ -527,10 +375,9 @@ export class FieldManual {
       this.emit({ type: 'stepDone', beat: this.beat.id, step: step.id });
       if (this.stepIdx + 1 < this.beat.steps.length) this.enter('stepOk');
       else this.confirm();
-    } else if (!step.auto && this.stepMs >= CONFIG.MANUAL_TIMEOUT_MS) {
+    } else if (!step.auto && this.stepMs >= this.nextHintMs) {
       this.emit({ type: 'timeout', beat: this.beat.id, step: step.id });
-      this.timedOut = true;
-      this.confirm();
+      this.nextHintMs += CONFIG.MANUAL_TIMEOUT_MS;
     }
   }
 
@@ -545,6 +392,9 @@ export class FieldManual {
         break;
       case 'leanIn':
         p = this.acc / CONFIG.MANUAL_WALK_M;
+        break;
+      case 'leanBack':
+        p = this.acc / CONFIG.MANUAL_BACK_M;
         break;
       case 'sitBack':
         p = this.acc / CONFIG.MANUAL_STOP_MS;
@@ -578,6 +428,14 @@ export class FieldManual {
 
   /** @returns true if the hum skipped to the recap this frame */
   private updateSkip(dt: number, intent: PlayerIntent): boolean {
+    if (this.phase !== 'end' && intent.pulses.length > 0) {
+      if (this.elapsedMs - this.skipClapMs <= CONFIG.MANUAL_SKIP_CLAP_WINDOW_MS) {
+        this.emit({ type: 'skip' });
+        this.enterEnd();
+        return true;
+      }
+      this.skipClapMs = this.elapsedMs;
+    }
     const armed = this.skipArmed;
     if (!intent.hum) {
       this.skipEligible = true;
@@ -628,6 +486,7 @@ export class FieldManual {
   private startStep(index: number): void {
     this.stepIdx = index;
     this.stepMs = 0;
+    this.nextHintMs = CONFIG.MANUAL_TIMEOUT_MS;
     this.acc = 0;
     this.tooQuiet = false;
     this.lastClapMs = null;
@@ -680,7 +539,7 @@ export class FieldManual {
 
     let fade = 0;
     if (p === 'cut') fade = 1 - Math.abs(this.phaseMs / (CONFIG.MANUAL_CUT_MS / 2) - 1);
-    else if (id === 'dark') fade = 1 - Math.min(this.phaseMs / CONFIG.MANUAL_OPEN_FADE_MS, 1);
+    else if (id === 'jar' && p === 'setup') fade = 1 - Math.min(this.phaseMs / CONFIG.MANUAL_OPEN_FADE_MS, 1);
 
     let stalker = 0;
     if (id === 'freeze') stalker = p === 'setup' ? Math.min(this.phaseMs / this.setupMs, 1) : p === 'await' ? 1 : 0;
@@ -693,7 +552,7 @@ export class FieldManual {
         ? {
             id: step.id,
             text: this.sim && step.keys ? `${step.text} ${step.keys}` : step.text,
-            hint: p === 'await' && !step.auto && (this.stepMs >= CONFIG.MANUAL_HINT_MS || this.tooQuiet) ? step.hint : '',
+            hint: p === 'await' && !step.auto ? (this.stepMs >= CONFIG.MANUAL_TIMEOUT_MS ? `${step.hint} ${TIMEOUT_TEXT}` : this.stepMs >= CONFIG.MANUAL_HINT_MS || this.tooQuiet ? step.hint : '') : '',
             gesture: step.gesture,
             meter: step.meter,
             progress: this.progress(),
@@ -706,9 +565,9 @@ export class FieldManual {
     return {
       phase: p,
       beat: id,
-      chapter: atEnd ? BEATS.length : this.beatIdx,
-      chapterCount: BEATS.length - 1,
-      title: beat?.title ?? 'You’re ready',
+      chapter: atEnd ? BEATS.length : this.beatIdx + 1,
+      chapterCount: BEATS.length,
+      title: beat?.title ?? 'Find the way out',
       lines: beat?.lines ?? [],
       step: stepView,
       done: p === 'confirm' && beat ? (this.timedOut ? TIMEOUT_TEXT : beat.done) : '',
@@ -730,7 +589,7 @@ export class FieldManual {
       frost,
       fade: Math.min(Math.max(fade, 0), 1),
       letterbox: !atEnd,
-      skip: { shown: !atEnd && !!beat && beat.id !== 'jar', progress: this.skipMs / CONFIG.MANUAL_SKIP_HUM_MS },
+      skip: { shown: !atEnd, progress: this.skipMs / CONFIG.MANUAL_SKIP_HUM_MS },
       events,
     };
   }

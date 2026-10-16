@@ -24,7 +24,7 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
 
 const RECAP: ReadonlyArray<{ key: 'turn' | 'lean' | 'clap' | 'hum'; title: string; text: string }> = [
   { key: 'turn', title: 'Turn your head', text: 'look around' },
-  { key: 'lean', title: 'Lean in · sit back', text: 'walk · stop' },
+  { key: 'lean', title: 'Lean in · out', text: 'forward · neutral stops · backward' },
   { key: 'clap', title: 'Clap', text: 'see the cave, and be heard' },
   { key: 'hum', title: 'Hum', text: 'firefly light, heard up close' },
 ];
@@ -70,7 +70,7 @@ export class ManualOverlay {
   private pulseAtMs = -Infinity;
   private readonly litAtMs: Record<string, number> = { turn: -Infinity, lean: -Infinity, clap: -Infinity, hum: -Infinity };
 
-  constructor(root: HTMLElement, sim: boolean) {
+  constructor(root: HTMLElement, private readonly sim: boolean) {
     this.el = document.createElement('div');
     this.el.className = 'manual';
     this.el.hidden = true;
@@ -94,10 +94,10 @@ export class ManualOverlay {
       </aside>
       <div class="mn-lost" data-q="lost"><b>I can’t see you</b><span>Come back in front of the camera. Everything waits for you.</span></div>
       <section class="mn-end" data-q="end">
-        <p class="mn-chapter">Field Manual · complete</p>
-        <h2>You’re ready</h2>
-        <div class="mn-tiles">${RECAP.map((r) => `<div class="mn-tile" data-t="${r.key}"><span class="mn-icon">${MANUAL_ICONS[r.key]}</span><b>${r.title}</b><span>${r.text}</span></div>`).join('')}</div>
-        <div class="mn-rules">
+        <p class="mn-chapter">ECHO</p>
+        <h2>Find the way out</h2>
+        <div class="mn-tiles" hidden>${RECAP.map((r) => `<div class="mn-tile" data-t="${r.key}"><span class="mn-icon">${MANUAL_ICONS[r.key]}</span><b>${r.title}</b><span>${r.text}</span></div>`).join('')}</div>
+        <div class="mn-rules" hidden>
           <p><span class="mn-icon">${MANUAL_ICONS.freeze}</span>When it stares: freeze. No movement, no sound.</p>
           <p><span class="mn-icon">${MANUAL_ICONS.hush}</span>Silent too long, and the Hush comes. Make a sound.</p>
         </div>
@@ -122,8 +122,8 @@ export class ManualOverlay {
     this.soundThreshold = document.createElement('u');
     this.meters.sound.row.querySelector('.mm-track')!.appendChild(this.soundThreshold);
     this.q.camLabel.textContent = sim ? 'DEV SIM · NO CAMERA' : 'YOU · LIVE';
-    this.q.skipText.textContent = sim ? 'HOLD H 3 s TO SKIP' : 'HUM 3 s TO SKIP';
-    this.q.endHint.textContent = sim ? 'Space (clap) to begin' : 'Clap to begin';
+    this.q.skipText.textContent = sim ? 'DOUBLE SPACE TO SKIP' : 'DOUBLE CLAP TO SKIP';
+    this.q.endHint.textContent = 'Entering the cave…';
   }
 
   setVideo(video: HTMLVideoElement): void {
@@ -210,12 +210,12 @@ export class ManualOverlay {
     if (intent.pulses.length > 0) {
       const loud = Math.max(...intent.pulses);
       // Pulse loudness runs 0..1.5 (1 = the player's calibrated clap), see mapping.onsetLoudness.
-      this.pulseFlash = Math.min(loud / 1.5, 1);
+      this.pulseFlash = Math.min(loud / CONFIG.MANUAL_METER_LOUDNESS_MAX, 1);
       this.pulsePeak = this.pulseFlash;
       this.pulseAtMs = nowMs;
       this.pulseTag = loud >= CONFIG.MANUAL_LOUD_MIN ? 'LOUD' : loud < CONFIG.MANUAL_SOFT_MAX ? 'soft' : 'clap';
     }
-    this.pulseFlash *= 0.9;
+    this.pulseFlash *= CONFIG.MANUAL_METER_FLASH_DECAY;
   }
 
   private updateMeters(g: ManualGauges, f: ManualFrame, nowMs: number): void {
@@ -236,7 +236,7 @@ export class ManualOverlay {
     this.soundThreshold.hidden = g.soundThreshold === null;
     if (g.soundThreshold !== null) this.soundThreshold.style.left = `${Math.min(Math.max(g.soundThreshold, 0), 1) * 100}%`;
     const hum = this.meters.hum;
-    hum.fill.style.width = `${Math.min(g.humLevel / 1.3, 1) * 100}%`; // humFromMic's level runs 0..1.3
+    hum.fill.style.width = `${Math.min(g.humLevel / CONFIG.MANUAL_METER_HUM_MAX, 1) * 100}%`; // humFromMic's level runs 0..1.3
     hum.value!.textContent = g.humHz ? `${Math.round(g.humHz)} Hz` : '';
     const still = this.meters.still;
     still.fill.style.width = `${(f.step?.meter === 'still' ? f.step.progress : 0) * 100}%`;
@@ -301,6 +301,12 @@ export class ManualOverlay {
         c.lineWidth = 2;
         c.strokeRect((1 - x1) * w, y0 * h, (x1 - x0) * w, (y1 - y0) * h);
       }
+      return;
+    }
+    if (!this.sim) {
+      c.fillStyle = '#d9d6cc';
+      c.font = '16px sans-serif';
+      c.fillText('Waiting for camera…', 60, h / 2);
       return;
     }
     // Sim stand-in: a head outline that turns with the turn keys and grows as you "lean in".

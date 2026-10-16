@@ -211,9 +211,9 @@ export class App {
         if (s.director.update(nowMs, dtS, intent, this.manualGauges(intent, frames), this.sensors?.lastFace ?? null)) {
           this.manualDone = true;
           this.manualLearned = s.director.learnedBasics;
-          s.director.exit();
           this.debug.log(nowMs, `field manual done · basics ${this.manualLearned ? 'learned' : 'not all done'}`);
           this.startLevel(this.levelIndex);
+          this.enterPlaying(nowMs);
         }
         break;
 
@@ -314,6 +314,10 @@ export class App {
   private setState(next: State): void {
     if (this.state.kind === 'caught' && next.kind !== 'caught') {
       this.overlays.setBlackout(false);
+      this.sfx?.silence(false);
+    }
+    if (this.state.kind === 'manual' && next.kind !== 'manual') {
+      this.state.director.exit();
       this.sfx?.silence(false);
     }
     this.state = next;
@@ -422,7 +426,7 @@ export class App {
   private afterSetup(): void {
     if (this.flags.manual && !this.manualDone && this.levelIndex === 0) {
       const clockS = (performance.now() - this.appStartMs) / 1000;
-      this.setState({ kind: 'manual', director: new ManualDirector(this.renderer, this.overlays, this.manualUi, this.sfx, this.sim !== null, clockS) });
+      this.setState({ kind: 'manual', director: new ManualDirector(this.renderer, this.overlays, this.manualUi, this.sfx, this.sim !== null, clockS, this.calib.speakerLeak) });
       this.debug.log(performance.now(), 'field manual');
     } else {
       this.startLevel(this.levelIndex);

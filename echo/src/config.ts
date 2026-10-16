@@ -543,16 +543,16 @@ export const CONFIG = {
   // ---------------- Field Manual (cinematic onboarding before the first level) ----------------
   /** The opening ("You can't see") lasts this long; it fades in from black over MANUAL_OPEN_FADE_MS. */
   MANUAL_OPEN_MS: 7000,
-  MANUAL_OPEN_FADE_MS: 2200,
+  MANUAL_OPEN_FADE_MS: 450,
   /** Each lesson's cinematic setup (title, camera move) before it waits for the player. */
-  MANUAL_SETUP_MS: 2800,
+  MANUAL_SETUP_MS: 900,
   /** A cut to another place: fade to black and back. */
-  MANUAL_CUT_MS: 1100,
+  MANUAL_CUT_MS: 450,
   /** The short tick between two steps of one lesson. */
-  MANUAL_STEP_OK_MS: 1000,
+  MANUAL_STEP_OK_MS: 250,
   /** The lesson's consequence line before the next lesson starts. */
-  MANUAL_CONFIRM_MS: 3600,
-  /** A step shows its hint after MANUAL_HINT_MS and is passed for the player after MANUAL_TIMEOUT_MS (never a soft-lock). */
+  MANUAL_CONFIRM_MS: 1100,
+  /** First hint, then repeated assistance every MANUAL_TIMEOUT_MS; only the requested action or explicit skip advances. */
   MANUAL_HINT_MS: 8000,
   MANUAL_TIMEOUT_MS: 20000,
   /** While the cave waits for the player it runs at this speed ("bullet time"). Acting snaps it back to 1. */
@@ -561,38 +561,50 @@ export const CONFIG = {
   MANUAL_ACTION_HOLD_MS: 900,
   MANUAL_TIME_EASE_S: 0.35,
   /** The cinematic camera eases in and out of its shot with this time constant (s). */
-  MANUAL_SHOT_EASE_S: 0.45,
+  MANUAL_SHOT_EASE_S: 0.22,
   /** Setups that aim down the tunnel turn the player with this time constant (s). */
   MANUAL_AIM_EASE_S: 0.35,
   /** The jar's close-up eases in and out with this time constant (s). */
-  MANUAL_JAR_EASE_S: 0.45,
+  MANUAL_JAR_EASE_S: 0.25,
   /** Faint "breathing" light while learning to look and walk: pulses nothing can hear. */
   MANUAL_GLOW_PULSE_MS: 1800,
   MANUAL_GLOW_LOUDNESS: 0.5,
   /** Look: head-turn travel needed each way (rad of view). */
-  MANUAL_LOOK_RAD: 0.8,
+  MANUAL_LOOK_RAD: 0.45,
   /** Walk: metres to lean forward for, then how long to stay stopped. */
-  MANUAL_WALK_M: 2,
+  MANUAL_WALK_M: 0.75,
   MANUAL_STOP_MS: 800,
   /** Clap: sharp sounds needed in the soft-then-loud step. */
   MANUAL_CLAP_EXTRA: 2,
+  MANUAL_BACK_M: 0.4,
+  MANUAL_SKIP_CLAP_WINDOW_MS: 500,
+  MANUAL_METER_LOUDNESS_MAX: 1.5,
+  MANUAL_METER_HUM_MAX: 1.3,
+  MANUAL_METER_FLASH_DECAY: 0.9,
+  MANUAL_FLINCH_SHAKE_M: 0.05,
+  MANUAL_FLINCH_SHAKE_S: 0.3,
+  MANUAL_HUSH_ANGLE_RAD: 0.35,
+  MANUAL_HUSH_REVEAL_STRENGTH: 0.55,
+  MANUAL_HOLLOW_SAFETY_M: 7,
+  MANUAL_HOLLOW_GLIMPSE_MS: 650,
+  MANUAL_HOLLOW_GLIMPSE_STRENGTH: 0.65,
   /** A clap at or above this loudness is called LOUD on the sound meter, below MANUAL_SOFT_MAX it is soft. */
   MANUAL_LOUD_MIN: 0.85,
   MANUAL_SOFT_MAX: 0.5,
   /** Jar: hum time that wakes the fireflies, then quiet time that lets them sleep. */
-  MANUAL_HUM_MS: 1500,
-  MANUAL_QUIET_MS: 1400,
+  MANUAL_HUM_MS: 1100,
+  MANUAL_QUIET_MS: 900,
   /** Hear: the Hollow is stopped this far from the player (it can never reach them here), or after MANUAL_HOLLOW_RUN_MS. */
   MANUAL_HOLLOW_HALT_M: 4.5,
-  MANUAL_HOLLOW_RUN_MS: 7000,
+  MANUAL_HOLLOW_RUN_MS: 3000,
   /** A clap the Hollow hasn't reacted to this long after it was made counts as "too quiet" (its hint shows at once). */
   MANUAL_HEARD_WAIT_MS: 300,
   /** Freeze: the Stalker's approach (the setup) starts this far behind the player. */
   MANUAL_STALKER_APPROACH_MS: 4200,
   MANUAL_STALKER_FROM_M: 12,
   /** Freeze: stillness needed during the stare; nothing is judged for MANUAL_FREEZE_GRACE_MS after it starts or after a flinch. */
-  MANUAL_FREEZE_MS: 3000,
-  MANUAL_FREEZE_GRACE_MS: 450,
+  MANUAL_FREEZE_MS: 3500,
+  MANUAL_FREEZE_GRACE_MS: 250,
   /** Hush: frost at its worst, how long a hum must last to count, and the pale shape's flicker (period, distance ahead). */
   MANUAL_FROST: 0.8,
   MANUAL_SOUND_HUM_MS: 300,
@@ -603,8 +615,8 @@ export const CONFIG = {
   /** Skip the manual hands-free: a hum held this long (not during the jar lesson, which asks for a hum). */
   MANUAL_SKIP_HUM_MS: 3000,
   /** End card: claps count after MANUAL_END_MIN_MS; it starts the game by itself after MANUAL_END_AUTO_MS. */
-  MANUAL_END_MIN_MS: 1500,
-  MANUAL_END_AUTO_MS: 16000,
+  MANUAL_END_MIN_MS: 500,
+  MANUAL_END_AUTO_MS: 1500,
   /** Live icons on the end card stay lit this long after the player does that action. */
   MANUAL_ICON_LIT_MS: 700,
   /** Setup narration appears one line every MANUAL_LINE_MS; the sound meter names the last clap (soft / LOUD) for MANUAL_SOUND_TAG_MS. */
@@ -622,23 +634,23 @@ export const CONFIG = {
     ],
     look: [
       { t: 0, yaw: 0.3, fov: 68 },
-      { t: 2.8, fov: 75 },
+      { t: 0.9, fov: 75 },
     ],
     move: [
       { t: 0, forward: -0.6, up: 0.12, fov: 66 },
-      { t: 2.8, fov: 75 },
+      { t: 0.9, fov: 75 },
     ],
     clap: [
       { t: 0, fov: 75 },
-      { t: 2.8, forward: 0.45, fov: 60 },
+      { t: 0.9, forward: 0.45, fov: 60 },
     ],
     jar: [
       { t: 0, fov: 75 },
-      { t: 2.8, pitch: -0.14, fov: 62 },
+      { t: 0.9, pitch: -0.14, fov: 62 },
     ],
     hear: [
       { t: 0, fov: 72 },
-      { t: 2.8, up: 0.05, fov: 46 },
+      { t: 0.9, up: 0.05, fov: 46 },
     ],
     freeze: [
       { t: 0, fov: 75 },
@@ -647,7 +659,7 @@ export const CONFIG = {
     ],
     hush: [
       { t: 0, fov: 68 },
-      { t: 2.8, forward: -0.3, fov: 84 },
+      { t: 0.9, forward: -0.3, fov: 84 },
     ],
     end: [
       { t: 0, fov: 75 },
