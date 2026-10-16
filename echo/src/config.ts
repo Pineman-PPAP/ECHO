@@ -380,12 +380,12 @@ export const CONFIG = {
    * A pulse lights the rock in a quick flash (decaying at CAVE_FLASH_DECAY_PER_S per second), leaving a
    * dim afterglow of CAVE_AFTERGLOW of it that fades over PULSE_FADE_S: the dark comes back fast.
    */
-  CAVE_AFTERGLOW: 0.36,
-  CAVE_FLASH_DECAY_PER_S: 2.8,
+  CAVE_AFTERGLOW: 0.45,
+  CAVE_FLASH_DECAY_PER_S: 2.3,
   /** Echo-only grading; leave the firefly jar's exposure and warm tint unchanged. */
   CAVE_ECHO_COLOR: 0xb2bdc2,
-  CAVE_PULSE_GAIN: 0.85,
-  CAVE_PULSE_MAX_LIGHT: 0.65,
+  CAVE_PULSE_GAIN: 1.1,
+  CAVE_PULSE_MAX_LIGHT: 0.8,
   CAVE_PULSE_ATTACK_S: 0.035,
   CAVE_PULSE_CREVICE: 0.55,
   CAVE_PULSE_GLOSS: 0.6,
