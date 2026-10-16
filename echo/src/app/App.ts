@@ -659,13 +659,7 @@ export class App {
 
   private updateOverlays(nowMs: number, intent: PlayerIntent, frames: SensorFrames | null): void {
     const playing = this.state.kind === 'playing';
-    const kind = this.state.kind;
-    this.sfx?.setBgmLevel(
-      kind === 'calibrating' ? 0
-        : kind === 'caught' ? CONFIG.BGM_CAUGHT_DUCK
-          : playing && this.world.stalker.holding ? CONFIG.BGM_STALKER_DUCK
-            : 1,
-    );
+    this.sfx?.setBgmLevel(this.state.kind === 'caught' ? CONFIG.BGM_CAUGHT_DUCK : 1);
     this.hud.show(playing);
     this.hud.update({
       levelName: this.world.level.def.name,
