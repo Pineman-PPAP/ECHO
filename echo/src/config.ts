@@ -555,6 +555,8 @@ export const CONFIG = {
   JUMPSCARE_THUD_GAIN: 1.0,
   /** The extra scare laid over the thud and clip (Sfx.jumpscareSting), and when the clip's face flickers back (s after the catch). */
   JUMPSCARE_STING_GAIN: 0.8,
+  /** The recorded high screech (public/jumpscare-scream.ogg, already mastered very loud) that starts with the catch. */
+  JUMPSCARE_SCREAM_GAIN: 0.6,
   JUMPSCARE_FLICKER_HITS_S: [2.2, 4.1],
   /** Menus and the title screen emit a soft background pulse this often so the maze is visible behind cards. */
   ATTRACT_PULSE_MS: 2600,

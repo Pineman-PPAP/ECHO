@@ -372,6 +372,7 @@ export class App {
     void audio.resume();
     this.sfx = new Sfx(audio, (gateMs) => this.onGameSound(gateMs));
     this.sfx.playThrough(this.jumpVideo.video, CONFIG.JUMPSCARE_VIDEO_GAIN);
+    this.sfx.loadJumpscareScream(`${import.meta.env.BASE_URL}jumpscare-scream.ogg`).catch(() => {}); // the other layers still play
     if (this.sim) {
       this.afterSetup();
       return;
@@ -560,6 +561,7 @@ export class App {
           this.deathsHere++;
           this.sfx?.stalkerStop();
           this.sfx?.thud();
+          this.sfx?.jumpscareScream();
           this.sfx?.jumpscareSting();
           const video = this.jumpVideo.ready;
           if (video) this.jumpVideo.play();

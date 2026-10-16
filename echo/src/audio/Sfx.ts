@@ -67,6 +67,8 @@ export class Sfx {
     /** The STAND STILL swell, cut dead when the face appears. */
     swell: AudioScheduledSourceNode[] | null;
   } | null = null;
+  /** The recorded jumpscare screech (public/jumpscare-scream.ogg), once loaded. */
+  private screamBuf: AudioBuffer | null = null;
   /** The current scream goes through this, so the jumpscare can cut it dead. */
   private screamBus: GainNode | null = null;
 
@@ -284,6 +286,24 @@ export class Sfx {
     const g = this.ctx.createGain();
     g.gain.value = gain;
     this.ctx.createMediaElementSource(el).connect(g).connect(this.master);
+  }
+
+  /** Fetches and decodes the recorded jumpscare screech so it can start the instant you're caught. */
+  async loadJumpscareScream(url: string): Promise<void> {
+    const res = await fetch(url);
+    this.screamBuf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+  }
+
+  /** The recorded high screech, from its first sample, over everything else (silence() cuts it with the rest). */
+  jumpscareScream(): void {
+    if (!this.screamBuf) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.screamBuf;
+    const g = this.ctx.createGain();
+    g.gain.value = CONFIG.JUMPSCARE_SCREAM_GAIN;
+    src.connect(g).connect(this.master);
+    src.start();
+    src.onended = () => g.disconnect();
   }
 
   /**
