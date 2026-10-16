@@ -78,7 +78,12 @@ export const CONFIG = {
   YIN_WINDOW_S: 0.021,
   YIN_MIN_HZ: 80,
   YIN_MAX_HZ: 1200,
-  YIN_THRESHOLD: 0.15,
+  /**
+   * First dip of the YIN difference function below this is the period. 0.15 was too strict for a soft,
+   * breathy hum: it fell through to the global minimum, often an octave or two low (a 200 Hz hum read
+   * as 100 Hz), and the jumps broke the hum's steadiness. Keep it below YIN_MAX_APERIODICITY.
+   */
+  YIN_THRESHOLD: 0.35,
   /** YIN result counts as "voiced" only below this aperiodicity (0 = perfect tone). 0.4 lets a soft, breathy hum through. */
   YIN_MAX_APERIODICITY: 0.4,
   /** Minimum time between pitch estimates. */

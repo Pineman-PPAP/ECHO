@@ -142,4 +142,68 @@ describe('MicAnalyzer (fake source)', () => {
     expect(onsets).toBe(0);
     expect(hum).toBe(false);
   });
+
+  /** Share of the time (from 0.4 s into the hum) a soft hum is detected; `gateEvery` gates the mic like game sounds do. */
+  function softHumOn(f0: number, aboveDb: number, breath: number, gateEvery: number | null = null): number {
+    const sr = 48000;
+    const signal = softHum(sr, f0, aboveDb, breath);
+    const src = new FakeSource(sr, signal);
+    const mic = new MicAnalyzer(src);
+    let on = 0;
+    let total = 0;
+    for (let ms = 16; ms < 8000; ms += 16) {
+      src.advance(16);
+      if (gateEvery && ms > 2500 && Math.floor(ms / gateEvery) !== Math.floor((ms - 16) / gateEvery)) mic.gate(ms + 250);
+      const f = mic.update(ms);
+      if (ms >= 2400) {
+        total++;
+        if (f.humActive) on++;
+      }
+    }
+    return on / total;
+  }
+
+  it.each([110, 150, 200, 250, 300])('catches a soft, breathy, wavering hum at %i Hz only ~8 dB over the room', (f0) => {
+    expect(softHumOn(f0, 8, 0.3)).toBeGreaterThan(0.95);
+  });
+
+  it('a hum already going is held through the mic gates of game sounds', () => {
+    expect(softHumOn(200, 8, 0.3, 600)).toBeGreaterThan(0.95);
+  });
+
+  it('loud broadband noise (wind, a fan, rustling) is not a hum', () => {
+    const sr = 48000;
+    const rand = mulberry32(5);
+    const signal = new Float32Array(sr * 6);
+    for (let i = 0; i < signal.length; i++) signal[i] = (rand() * 2 - 1) * (i > 2 * sr ? 0.03 : 0.003);
+    const src = new FakeSource(sr, signal);
+    const mic = new MicAnalyzer(src);
+    let hum = false;
+    for (let ms = 16; ms < 6000; ms += 16) {
+      src.advance(16);
+      hum ||= mic.update(ms).humActive;
+    }
+    expect(hum).toBe(false);
+  });
 });
+
+/**
+ * A quiet closed-mouth hum from 2 s to 8 s: fundamental plus two harmonics, aboveDb over a white-noise
+ * room, with vibrato, slow pitch drift, a swelling level and breath noise (`breath` x the hum's amplitude).
+ */
+function softHum(sr: number, f0: number, aboveDb: number, breath: number): Float32Array {
+  const rand = mulberry32(3);
+  const x = new Float32Array(sr * 8);
+  const room = 0.003;
+  for (let i = 0; i < x.length; i++) x[i] = (rand() * 2 - 1) * room;
+  const amp = (room / Math.sqrt(3)) * Math.pow(10, aboveDb / 20) * Math.SQRT2;
+  let ph = 0;
+  for (let i = 2 * sr; i < x.length; i++) {
+    const t = i / sr;
+    const f = f0 * (1 + 0.012 * Math.sin(2 * Math.PI * 4.5 * t) + 0.006 * Math.sin(2 * Math.PI * 0.7 * t));
+    ph += (2 * Math.PI * f) / sr;
+    const a = amp * (1 + 0.25 * Math.sin(2 * Math.PI * 1.3 * t)) * Math.min((t - 2) / 0.15, 1);
+    x[i] += a * (0.8 * Math.sin(ph) + 0.45 * Math.sin(2 * ph) + 0.2 * Math.sin(3 * ph)) + a * breath * (rand() * 2 - 1);
+  }
+  return x;
+}

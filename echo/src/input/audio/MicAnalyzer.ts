@@ -166,7 +166,9 @@ export class MicAnalyzer {
       this.lastPitchMs = nowMs;
     }
     const wasActive = this.hum.active;
-    this.hum.update(nowMs, aboveDb, pitch);
+    // While gated the mic hears the game, not the player: that is no evidence either way, so a hum
+    // already going is held (a gate must not switch it off) and a new one can't start.
+    if (!gated) this.hum.update(nowMs, aboveDb, pitch);
     if (this.hum.active && !wasActive) this.humStartMs = nowMs;
 
     return {
