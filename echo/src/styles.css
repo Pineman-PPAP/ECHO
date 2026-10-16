@@ -145,6 +145,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .whiteout.flash { animation: echo-flash 140ms ease-out; }
 .blackout { position: absolute; inset: 0; pointer-events: none; z-index: 7; background: #000; opacity: 0; }
 .blackout.on { opacity: 1; }
+/* The retry screen: the cave drains to near-black with a dried-blood red at the edges, fading in behind the card. */
+.deathveil {
+  position: absolute; inset: 0; pointer-events: none; z-index: 4; opacity: 0; transition: opacity 1.2s ease-out;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55) 0%, rgba(8, 0, 0, 0.82) 60%, rgba(70, 0, 0, 0.9) 100%);
+}
+.deathveil.on { opacity: 1; }
 /* The filmed jumpscare: over the HUD, under the white frame and blackout, with the cave's grain and dark edges. */
 .jumpvid { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; background: #000; }
 .jumpvid[hidden] { display: none; }

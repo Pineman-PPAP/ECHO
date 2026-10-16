@@ -5,7 +5,7 @@ import { cellCenter } from '../game/grid';
 import { guidePoint } from '../game/guide';
 import { LEVELS } from '../game/levels';
 import { Tutorial } from '../game/Tutorial';
-import { World, type WorldEvent } from '../game/World';
+import { World, type Catcher, type WorldEvent } from '../game/World';
 import { CalibrationRunner, CONTROLS, defaultCalibration, type CalibCue, type CalibrationData } from '../input/calibration';
 import { SensorError } from '../input/camera';
 import { IntentBuilder } from '../input/IntentBuilder';
@@ -47,6 +47,22 @@ const TUTORIAL_POT_PROMPT = 'That was loud. Down here, something would have hear
 const STALKER_WARN_PROMPT = 'STAND STILL. Don’t move. Don’t make a sound.';
 const STALKER_STARE_PROMPT = 'Don’t move. Don’t breathe.';
 const STALKER_SPARED_PROMPT = 'It turned away… Move on, and watch the floor for pots.';
+
+/** The retry screen: what got you, and how to beat it next time. */
+const DEATH_TEXT: Record<Catcher, { title: string; tip: string }> = {
+  hollow: {
+    title: 'A Hollow heard you',
+    tip: 'They are blind and hunt by sound. Every clap and every hurried step tells them where you are. Lean gently, and clap only when you must.',
+  },
+  hush: {
+    title: 'The Hush took you',
+    tip: 'It is drawn to silence. When the frost creeps in, clap or hum to drive it away.',
+  },
+  stalker: {
+    title: 'The Stalker took you',
+    tip: 'A broken pot calls it. When it is in front of you, don’t move, don’t turn your head, don’t make a sound. Light the floor and walk around pots.',
+  },
+};
 
 /** Shown the first time the Hush appears in a level. */
 const HUSH_PROMPT = 'Too quiet… something is drawn to the silence. Make a sound.';
@@ -95,6 +111,9 @@ export class App {
   /** Timed HUD line from an authored moment or the Hush's first appearance. */
   private momentPrompt: { text: string; untilMs: number } | null = null;
   private hushPrompted = false;
+  /** What caught you last, and how many times you've died on this level (retry screen). */
+  private lastCatcher: Catcher = 'hollow';
+  private deathsHere = 0;
   private drips: DripSpot[] = [];
   private lastDripS = 0;
   private nextAttractMs = 0;
@@ -254,16 +273,25 @@ export class App {
         break;
       }
 
-      case 'gameover':
+      case 'gameover': {
+        // The retry screen: what got you, a tip, and the voice controls. A clap drops you straight
+        // back into the level (no intro card); a hum recalibrates.
+        const death = DEATH_TEXT[this.lastCatcher];
+        const rows: Array<readonly [string, string]> = [[this.sim ? 'Space' : 'Clap', 'Try again']];
+        if (this.sensors) rows.push(['Hum', 'Recalibrate camera and mic']);
         this.card.show({
-          title: 'THEY FOUND YOU',
+          kicker: `${this.world.level.def.name} · Death ${this.deathsHere}`,
+          title: death.title,
           body: statsText(this.levelStats),
-          hint: menuReady ? this.confirmHint('try again') : '',
+          detail: death.tip,
+          rows,
+          hint: menuReady ? this.confirmHint('try again') : 'Catch your breath…',
           tone: 'danger',
         });
-        if (menuReady && clap) this.startLevel(this.levelIndex);
+        if (menuReady && clap) this.startLevel(this.levelIndex, true);
         else if (menuReady && intent.humStarted && this.sensors) this.startCalibration();
         break;
+      }
 
       case 'escaped':
         this.card.show({
@@ -405,8 +433,11 @@ export class App {
     this.debug.log(performance.now(), `calibrated · leftSign ${data.leftSign} · leak ${data.speakerLeak} · ${data.warnings.length} warnings`);
   }
 
-  private startLevel(index: number): void {
-    this.levelIndex = Math.max(0, Math.min(index, LEVELS.length - 1));
+  /** @param retry straight back into play after a death (skips the intro card) */
+  private startLevel(index: number, retry = false): void {
+    const next = Math.max(0, Math.min(index, LEVELS.length - 1));
+    if (next !== this.levelIndex || !retry) this.deathsHere = 0;
+    this.levelIndex = next;
     this.world = new World(LEVELS[this.levelIndex], this.levelIndex + 1);
     this.renderer.loadLevel(this.world.level);
     this.tutorial = this.world.level.def.tutorial ? new Tutorial(this.world, this.sim !== null) : null;
@@ -422,7 +453,8 @@ export class App {
       this.sfx.setGuidePosition(e.x, 1.3, e.z);
       this.sfx.startDrone();
     }
-    this.setState({ kind: 'intro' });
+    if (retry) this.enterPlaying(performance.now());
+    else this.setState({ kind: 'intro' });
   }
 
   private enterPlaying(nowMs: number): void {
@@ -470,6 +502,8 @@ export class App {
           break;
         case 'caught':
           this.levelStats = this.measureLevel(nowMs);
+          this.lastCatcher = e.by;
+          this.deathsHere++;
           this.sfx?.stalkerStop();
           this.sfx?.thud();
           const video = this.jumpVideo.ready;
@@ -639,6 +673,7 @@ export class App {
       active: playing,
       danger: playing ? this.world.danger() : 0,
       hush: playing ? this.world.hushCloseness() : 0,
+      dead: this.state.kind === 'gameover',
     });
     const p = this.world.player;
     this.debug.update({

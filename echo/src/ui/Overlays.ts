@@ -7,6 +7,8 @@ export interface OverlayState {
   danger: number;
   /** 0..1 how close the Hush is (pale frost creeping in from the edges). */
   hush: number;
+  /** The retry screen: the cave sinks into a dark red veil behind the card. */
+  dead: boolean;
 }
 
 /**
@@ -19,6 +21,7 @@ export class Overlays {
   private readonly whiteout: HTMLElement;
   private readonly blackout: HTMLElement;
   private readonly frost: HTMLElement;
+  private readonly deathVeil: HTMLElement;
   private lastFrost = -1;
   private lastOpacity = -1;
 
@@ -30,16 +33,19 @@ export class Overlays {
       '<div class="vignette"></div>' +
       '<div class="whiteout"></div>' +
       '<div class="blackout"></div>' +
-      '<div class="frost"></div>';
+      '<div class="frost"></div>' +
+      '<div class="deathveil"></div>';
     this.vignette = wrap.querySelector<HTMLElement>('.vignette')!;
     this.whiteout = wrap.querySelector<HTMLElement>('.whiteout')!;
     this.blackout = wrap.querySelector<HTMLElement>('.blackout')!;
     wrap.querySelector<HTMLElement>('.grain')!.style.backgroundImage = `url(${grainTexture()})`;
     this.frost = wrap.querySelector<HTMLElement>('.frost')!;
+    this.deathVeil = wrap.querySelector<HTMLElement>('.deathveil')!;
     root.append(...Array.from(wrap.children));
   }
 
   update(s: OverlayState): void {
+    this.deathVeil.classList.toggle('on', s.dead);
     const opacity = s.active ? s.danger * 0.7 : 0;
     if (Math.abs(opacity - this.lastOpacity) > 0.01) {
       this.vignette.style.opacity = String(opacity);
